@@ -23,6 +23,7 @@ FILES = {
     "payload/manifest.json": f".config/omarchy/plugins/{PLUGIN}/manifest.json",
     "payload/soft-ui-pop.mp3": ".local/share/sounds/window-attention/soft-ui-pop.mp3",
     "README.md": ".local/share/window-attention/README.md",
+    "assets/yoohoo-hero.gif": ".local/share/window-attention/assets/yoohoo-hero.gif",
     "RELEASING.md": ".local/share/window-attention/RELEASING.md",
     "VERSION": ".local/share/window-attention/VERSION",
     "LICENSE": ".local/share/window-attention/LICENSE",

@@ -9,6 +9,8 @@
 Theme-aware window attention for Omarchy: a soft pulse, a tiny pop,
 and a guest list of windows waiting for their moment.
 
+![Yoohoo's theme-colored border gently breathing around an agent window awaiting attention](assets/yoohoo-hero.gif)
+
 [![Tests](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml/badge.svg)](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-f5a9b8)](LICENSE)
 
