@@ -10,6 +10,8 @@ A breathing border, a soft pop, and a bell menu for Omarchy.
 
 ![Yoohoo's theme-colored border gently breathing around an agent window awaiting attention](assets/yoohoo-hero.gif)
 
+![The release theme largely shipped. 0.1.9 went from build 1395 to 1427 in two days.](assets/release-theme.png)
+
 [![Tests](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml/badge.svg)](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-f5a9b8)](LICENSE)
 
