@@ -30,6 +30,24 @@ attention marker clears and its normal border returns. Closing the window
 clears it too. A local history keeps a record of the requests, so the drama
 doesn't have to disappear without receipts.
 
+## Agents, meet your stage manager
+
+Yoohoo is especially handy when you're working with coding agents such as
+**Codex CLI and Claude Code** across several terminal windows. Let them work
+while you do something else; when they request attention through a supported
+terminal's bell or desktop notification, Yoohoo gives their window a little
+wave and a place in the bell menu. No agent-specific hooks required. The
+agent and terminal must actually emit one of those signals—Yoohoo doesn't
+infer that a task has finished by reading the conversation.
+
+And the included bell menu is only one way to use it. You can build your own
+**Quickshell customizations** around Yoohoo's shared attention list: a panel
+of waiting agent windows, a workspace overview with attention badges, or an
+entirely different way to choose what gets your attention next. Read
+`window-attention list` for structured JSON, and use
+`window-attention focus ADDRESS` when the user selects a window. Yoohoo
+handles the tracking and acknowledgement; you get to design the experience.
+
 **Ready?** Start with [requirements](#requirements--before-the-entrance) and
 [installation](#installation--get-in-darling). [Settings](#the-dressing-room),
 [verification](#receipts-please), and [uninstallation](#take-a-bow) are below too.
