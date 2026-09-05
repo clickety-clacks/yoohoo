@@ -23,6 +23,8 @@ FILES = {
     "payload/manifest.json": f".config/omarchy/plugins/{PLUGIN}/manifest.json",
     "payload/soft-ui-pop.mp3": ".local/share/sounds/window-attention/soft-ui-pop.mp3",
     "README.md": ".local/share/window-attention/README.md",
+    "RELEASING.md": ".local/share/window-attention/RELEASING.md",
+    "VERSION": ".local/share/window-attention/VERSION",
     "LICENSE": ".local/share/window-attention/LICENSE",
     "THIRD_PARTY.md": ".local/share/window-attention/THIRD_PARTY.md",
     "tests/test_attention.py": ".local/share/window-attention/test_attention.py",

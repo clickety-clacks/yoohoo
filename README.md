@@ -88,6 +88,13 @@ omarchy pkg add python-dbus python-gobject
 
 ## Installation — get in, darling
 
+For a versioned installation, download the archive and `SHA256SUMS` from the
+[latest release](https://github.com/clickety-clacks/yoohoo/releases/latest),
+then follow that release's checksum, extraction, and install instructions.
+Each archive includes the installer and default sound. No Git checkout required.
+
+Or install the development version from the repository:
+
 Run as your desktop user, **not root**:
 
 ```bash
@@ -257,5 +264,7 @@ MIT licensed and must not be redistributed as a standalone audio asset.
 
 Made by [clickety-clacks](https://github.com/clickety-clacks).
 Independent of the Omarchy project.
+
+Maintainers: [how to cut a release](RELEASING.md).
 
 **Your windows may crave attention. Your focus is still yours.** 💅

@@ -1,0 +1,43 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run all tests
+        run: python -B -m unittest discover -s tests -v
+      - name: Build versioned archive and checksums
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python -B scripts/build-release.py --tag "$RELEASE_TAG"
+      - name: Verify archive and test the unpacked distribution
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+          mkdir unpacked
+          tar -xzf yoohoo-*.tar.gz -C unpacked
+          cd unpacked/yoohoo-*
+          python -B -m unittest discover -s tests -v
+      - name: Publish complete GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/yoohoo-*.tar.gz dist/SHA256SUMS --verify-tag --draft --title "Yoohoo $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md"
+          gh release edit "$RELEASE_TAG" --draft=false --latest
