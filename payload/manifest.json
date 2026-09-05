@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "window-attention.indicator",
   "name": "Yoohoo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Mike",
-  "description": "A little drama. Zero focus theft. Courteous window attention for Omarchy.",
+  "description": "Know which windows need you. Get to them when you're ready.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {

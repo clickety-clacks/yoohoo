@@ -113,6 +113,64 @@ the intended changes; otherwise a later apply may restore older versions.
 
 ## The dressing room
 
+### Keyboard menu controls
+
+Yoohoo provides generic actions; it does not install any global shortcuts.
+Call them through `qs ipc -p /usr/share/omarchy/shell call window-attention.indicator ACTION`:
+
+| Action | Behavior |
+| --- | --- |
+| `next` | Open with the first entry selected, or cycle forward if already open. |
+| `previous` | Open with the last entry selected, or cycle backward if already open. |
+| `accept` | Open the selected window only during a session started by next/previous. |
+| `cancel` | Close without opening a window. |
+| `toggle` | Ordinary menu open/close; no release-to-accept session. |
+
+Inside the menu, Tab/Shift+Tab and arrow keys cycle, Enter opens, and Escape
+cancels. Selection wraps, follows the same window across refreshes, and scrolls
+into view. Clicking the bell still opens an ordinary menu.
+
+For an optional Super+Tab switcher, add this to your personal Hyprland Lua
+bindings. **This replaces Omarchy's next/previous workspace shortcuts.** Choose
+different keys if you use those shortcuts. The modifier is your choice, not a
+Yoohoo requirement.
+
+```lua
+hl.unbind("SUPER + TAB")
+hl.unbind("SUPER + SHIFT + TAB")
+local yoohoo_ipc = "qs ipc -p /usr/share/omarchy/shell call window-attention.indicator ordered "
+local yoohoo_epoch = tostring(os.time()) .. "-" .. tostring(math.random(1000000))
+local yoohoo_session, yoohoo_sequence = 0, 0
+local function yoohoo_send(action)
+  if action == "accept" and yoohoo_sequence == 0 then return end
+  if yoohoo_sequence == 0 then yoohoo_session = yoohoo_session + 1 end
+  yoohoo_sequence = yoohoo_sequence + 1
+  hl.exec_cmd(yoohoo_ipc .. action .. " " .. yoohoo_epoch .. "-" .. yoohoo_session .. " " .. yoohoo_sequence)
+  if action == "accept" then yoohoo_sequence = 0 end
+end
+o.bind("SUPER + TAB", "Yoohoo: open or next", function() yoohoo_send("next") end)
+o.bind("SUPER + SHIFT + TAB", "Yoohoo: open or previous", function() yoohoo_send("previous") end)
+o.bind("Super_L", nil, function() yoohoo_send("accept") end, { release = true, ignore_mods = true, non_consuming = true, transparent = true })
+o.bind("Super_R", nil, function() yoohoo_send("accept") end, { release = true, ignore_mods = true, non_consuming = true, transparent = true })
+```
+
+Hold Super and tap Tab to cycle; add Shift to reverse; release Super to open
+your selection. Escape cancels, and releasing Super after cancellation does
+nothing. `transparent` keeps the release binding from being suppressed after
+Tab; `ignore_mods` lets it work even if Shift is still held. No shortcuts are
+changed by installation or upgrade.
+
+The example uses `ordered ACTION STREAM SEQUENCE`, an optional IPC transport
+for bindings that spawn separate processes. Give each held-key session a unique
+stream ID and number its commands from 1. Yoohoo buffers out-of-order arrivals
+and ignores duplicates, so a quick release cannot reach the menu before its
+opening command. Plain `next`, `previous`, `accept`, and `cancel` remain available
+for callers that already deliver commands in order. Losing a command or restarting
+the shell mid-session can abandon that session; release and press again to start
+a new one. The menu itself contains no modifier-key policy.
+
+### Files and settings
+
 Stage name Yoohoo, filename `window-attention`. The files keep the original
 name so existing installs and dotfile tracking keep working.
 
@@ -220,6 +278,7 @@ python -B ~/.local/share/window-attention/test_attention.py
 ```
 
 Automated tests cover daemon state/race handling and staged installation,
+JavaScript selection policy (the full development suite also requires Node.js),
 reinstallation, config preservation, and removal. Desktop behavior and
 compatibility with other Omarchy versions require live testing. Live checks
 on the original deployment exercised both native urgency and real terminal

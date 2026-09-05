@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "Selection.js" as Selection
 
 Panel {
   id: root
@@ -16,6 +17,12 @@ Panel {
   readonly property color surface: Color.popups.background
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   property var windows: []
+  property string selectedAddress: ""
+  property bool cycling: false
+  property bool accepting: false
+  property var pendingSteps: []
+  property var commandStreams: ({})
+  property var streamOrder: []
   property string errorText: ""
   property double nowMs: Date.now()
   readonly property string attentionCommand: Quickshell.env("HOME") + "/.local/bin/window-attention"
@@ -29,11 +36,77 @@ Panel {
   function applyPayload(text) {
     try {
       var payload = JSON.parse(String(text || ""))
+      var previous = windows
       windows = payload.windows || []
+      selectedAddress = Selection.reconcile(previous, windows, selectedAddress)
+      if (pendingSteps.length) {
+        selectedAddress = ""
+        for (var i = 0; i < pendingSteps.length; ++i)
+          selectedAddress = Selection.step(windows, selectedAddress, pendingSteps[i])
+        pendingSteps = []
+      }
       errorText = ""
+      if (accepting) finishAccept()
     } catch (error) {
       errorText = "Attention state is unreadable"
+      accepting = false
     }
+  }
+
+  function cycle(direction) {
+    direction = direction < 0 ? -1 : 1
+    if (!opened) {
+      root.open()
+      selectedAddress = ""
+      pendingSteps = [direction]
+    } else if (pendingSteps.length) {
+      pendingSteps = pendingSteps.concat([direction])
+    }
+    cycling = true
+    selectedAddress = Selection.step(windows, selectedAddress, direction)
+  }
+
+  // Optional ordered transport for keybinds that launch separate IPC processes.
+  // A stream starts at sequence 1; callers choose its ID and key/modifier policy.
+  function orderedCommand(action, streamId, sequence) {
+    if (["next", "previous", "accept", "cancel"].indexOf(action) < 0 || sequence < 1) return
+    if (!streamId.length || streamId.length > 128) return
+    streamId = "stream:" + streamId
+    if (!commandStreams[streamId]) {
+      commandStreams[streamId] = { next: 1, pending: {} }
+      streamOrder.push(streamId)
+      if (streamOrder.length > 64) delete commandStreams[streamOrder.shift()]
+    }
+    var commands = Selection.enqueue(commandStreams[streamId], sequence, action)
+    for (var i = 0; i < commands.length; ++i) {
+      if (commands[i] === "next") cycle(1)
+      else if (commands[i] === "previous") cycle(-1)
+      else if (commands[i] === "accept") acceptCycle()
+      else root.close()
+    }
+  }
+
+  function moveSelection(direction) {
+    if (pendingSteps.length) pendingSteps = pendingSteps.concat([direction])
+    selectedAddress = Selection.step(windows, selectedAddress, direction)
+  }
+
+  function acceptCycle() {
+    if (!opened || !cycling || accepting) return
+    acceptSelection()
+  }
+
+  function acceptSelection() {
+    if (!opened || accepting) return
+    accepting = true
+    refreshNow() // Validate against a fresh list before activating.
+  }
+
+  function finishAccept() {
+    accepting = false
+    var address = selectedAddress
+    if (address) focusAddress(address)
+    else root.close()
   }
 
   function age(timestamp) {
@@ -58,9 +131,16 @@ Panel {
   implicitHeight: button.implicitHeight
 
   Component.onCompleted: refreshNow()
-  onOpenedChanged: if (opened) {
-    nowMs = Date.now()
-    refreshNow()
+  onOpenedChanged: {
+    if (opened) {
+      selectedAddress = windows.length ? windows[0].address : ""
+      nowMs = Date.now()
+      refreshNow()
+    } else {
+      cycling = false
+      accepting = false
+      pendingSteps = []
+    }
   }
 
   Timer {
@@ -78,7 +158,10 @@ Panel {
     running: false
     onExited: function(exitCode, exitStatus) {
       if (exitCode === 0) root.applyPayload(listOutput.text)
-      else root.errorText = "Yoohoo attention state is unavailable"
+      else {
+        root.errorText = "Yoohoo attention state is unavailable"
+        root.accepting = false
+      }
     }
     stdout: StdioCollector {
       id: listOutput
@@ -100,9 +183,18 @@ Panel {
     function open(): void { root.open() }
     function close(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function next(): void { root.cycle(1) }
+    function previous(): void { root.cycle(-1) }
+    function accept(): void { root.acceptCycle() }
+    function cancel(): void { root.close() }
+    function ordered(action: string, stream: string, sequence: int): void {
+      root.orderedCommand(action, stream, sequence)
+    }
     function refresh(): string { root.refreshNow(); return "ok" }
     function status(): string {
       return JSON.stringify({ opened: root.opened, windows: root.windows,
+                              selectedAddress: root.selectedAddress, cycling: root.cycling,
+                              selectedIndex: attentionList.currentIndex, scrollY: attentionList.contentY,
                               error: root.errorText, hasBar: root.bar !== null })
     }
   }
@@ -137,15 +229,13 @@ Panel {
       anchors.fill: parent
       onMoveRequested: function(dx, dy) {
         if (dy === 0 || root.windows.length === 0) return
-        attentionList.currentIndex = Math.max(0, Math.min(root.windows.length - 1,
-                                                           attentionList.currentIndex + dy))
+        root.moveSelection(dy)
       }
       onActivateRequested: {
-        if (attentionList.currentIndex >= 0 && attentionList.currentIndex < root.windows.length)
-          root.focusAddress(root.windows[attentionList.currentIndex].address)
+        root.acceptSelection()
       }
       onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onTabRequested: function(direction) { root.moveSelection(direction) }
       onTextKey: function(text) { if (text === "r" || text === "R") root.refreshNow() }
 
       Column {
@@ -200,7 +290,9 @@ Panel {
           model: root.windows
           spacing: Style.space(6)
           clip: true
-          currentIndex: root.windows.length > 0 ? 0 : -1
+          currentIndex: Selection.indexOf(root.windows, root.selectedAddress)
+          onCurrentIndexChanged: if (currentIndex >= 0)
+            Qt.callLater(function() { attentionList.positionViewAtIndex(attentionList.currentIndex, ListView.Contain) })
 
           delegate: Rectangle {
             required property var modelData
@@ -217,7 +309,7 @@ Panel {
             MouseArea {
               anchors.fill: parent
               hoverEnabled: true
-              onEntered: attentionList.currentIndex = index
+              onEntered: if (!root.cycling) root.selectedAddress = modelData.address
               onClicked: root.focusAddress(modelData.address)
             }
 
@@ -256,7 +348,7 @@ Panel {
 
         Text {
           width: parent.width
-          text: "↑/↓ select · Enter open · R refresh · Esc close"
+          text: "Tab/Shift+Tab or ↑/↓ select · Enter open · Esc close"
           color: root.foreground
           opacity: 0.55
           font.family: root.fontFamily

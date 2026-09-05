@@ -20,6 +20,7 @@ FILES = {
     "payload/window-attention.service": ".config/systemd/user/window-attention.service",
     "payload/config.toml": ".config/window-attention/config.toml",
     "payload/Panel.qml": f".config/omarchy/plugins/{PLUGIN}/Panel.qml",
+    "payload/Selection.js": f".config/omarchy/plugins/{PLUGIN}/Selection.js",
     "payload/manifest.json": f".config/omarchy/plugins/{PLUGIN}/manifest.json",
     "payload/soft-ui-pop.mp3": ".local/share/sounds/window-attention/soft-ui-pop.mp3",
     "README.md": ".local/share/window-attention/README.md",
