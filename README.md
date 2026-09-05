@@ -4,83 +4,73 @@
 
 ### Darling, your window would like a word.
 
-**A little drama. Zero focus theft.**
+**Know which windows need you. Get to them when you're ready.**
 
-Theme-aware window attention for Omarchy: a soft pulse, a tiny pop,
-and a guest list of windows waiting for their moment.
+A breathing border, a soft pop, and a bell menu for Omarchy.
 
 ![Yoohoo's theme-colored border gently breathing around an agent window awaiting attention](assets/yoohoo-hero.gif)
 
 [![Tests](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml/badge.svg)](https://github.com/clickety-clacks/yoohoo/actions/workflows/tests.yml)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-f5a9b8)](LICENSE)
 
-**Make an entrance. Don't interrupt the number.**
-
 </div>
 
 ---
 
-Your terminal finishes. Your application needs you. Your cursor is halfway
-through something important. This is not the moment for a hostile takeover.
-
-Yoohoo listens for applications requesting your attention and marks the window
-that needs you without switching your workspace or taking focus away from what
-you're doing. Its border softly pulses in your theme's colors, a gentle pop
-plays, and the window joins a list in your bar's bell menu. When you're ready,
-select it from the menu to go there, or focus it yourself; either way, the
-attention marker clears and its normal border returns. Closing the window
-clears it too. A local history keeps a record of the requests, so the drama
-doesn't have to disappear without receipts.
+When a window needs you, Yoohoo gives it a gently breathing border, a soft
+sound, and a spot in your bar's bell menu. Pick it from the menu when you're
+ready. Its entry clears and its border goes back to normal. Switching to it
+yourself or closing it clears the entry too. Until then, it waits.
 
 ## Agents, meet your stage manager
 
-Yoohoo is especially handy when you're working with coding agents such as
-**Codex CLI and Claude Code** across several terminal windows. Let them work
-while you do something else; when they request attention through a supported
-terminal's bell or desktop notification, Yoohoo gives their window a little
-wave and a place in the bell menu. No agent-specific hooks required. The
-agent and terminal must actually emit one of those signals—Yoohoo doesn't
-infer that a task has finished by reading the conversation.
+Running **Codex CLI or Claude Code** in several terminals? Let them work while
+you do something else. When an agent asks for you through a supported terminal's
+bell or desktop notification, Yoohoo marks that window and adds it to the menu.
+You can see who's waiting without checking every terminal. Very considerate
+of them, for once.
 
-And the included bell menu is only one way to use it. You can build your own
-**Quickshell customizations** around Yoohoo's shared attention list: a panel
-of waiting agent windows, a workspace overview with attention badges, or an
-entirely different way to choose what gets your attention next. Read
-`window-attention list` for structured JSON, and use
-`window-attention focus ADDRESS` when the user selects a window. Yoohoo
-handles the tracking and acknowledgement; you get to design the experience.
+We recommend **Ghostty**, the terminal used for Yoohoo's live checks. Other
+terminals can work if they emit supported attention signals. The agent and
+terminal must actually send a bell or notification; Yoohoo doesn't read the
+conversation to work out when a task is done. No agent-specific hooks are needed.
 
-**Ready?** Start with [requirements](#requirements--before-the-entrance) and
-[installation](#installation--get-in-darling). [Settings](#the-dressing-room),
+Want your own **Quickshell** UI? Use Yoohoo's attention list to build a panel
+of waiting agent windows or add attention badges to your workspace overview.
+Read `window-attention list` for structured JSON and call
+`window-attention focus ADDRESS` when someone picks a window. Yoohoo keeps
+the list up to date; your UI decides how to show it.
+
+**Ready?** Start with [requirements](#requirements) and
+[installation](#installation). [Settings](#the-dressing-room),
 [verification](#receipts-please), and [uninstallation](#take-a-bow) are below too.
 
 ## She's got range
 
 - **A tasteful pulse.** A 5px border breathes between your theme's inactive
   and active border colors. No hardcoded pink. Fabulous is theme-independent.
-- **A little pop.** A soft notification sound on first entry, with a shared
-  cooldown. Repeated requests don't keep playing it.
+- **A little pop.** One soft sound when a window first joins the list, with a
+  shared cooldown. Repeat requests stay quiet.
 - **A guest list.** A bell-menu entry shows the window, workspace, age, and
   signal count. Select it to go there.
 - **An exit cue.** Focusing or closing the window clears its entry and
-  attention styling. Acknowledged, not held hostage.
+  attention styling.
 - **Receipts.** A local JSON list for other UIs, plus optional JSONL history.
-- **Manners.** No automatic notification clicks. No agent hooks. No tmux
-  inference. No pretending every desktop notification identifies a window.
+- **Manners.** Yoohoo waits for you to pick a window before taking you there.
+  See [how it works](#how-she-knows) for the detection rules and limits.
 
-## Requirements — before the entrance
+## Requirements
 
-This is an **early per-user integration for Lua-based Omarchy**, not a
-universal Hyprland extension or an official Omarchy component. The desktop
-integration has been exercised on Hyprland **0.56.2** with Omarchy's
-Quickshell shell. Other versions need validation; older `.conf`-based
-Hyprland setups are not supported by this installer.
+Yoohoo is an **early per-user integration for Lua-based Omarchy**. It has been
+tested on Hyprland **0.56.2** with Omarchy's Quickshell shell. Other versions
+need validation; the installer does not support older `.conf`-based Hyprland
+setups. This is an independent project, not an official Omarchy component.
 
 Required: Python **3.11+**, Hyprland's `hyprctl`, Omarchy/Quickshell, a systemd
 user session, and PipeWire's `pw-play`. Standard desktop-notification capture
 also needs `python-dbus` and `python-gobject` and a session bus that allows
-`BecomeMonitor`. There is no pip environment, web server, cloud service,
-Codex, Claude, Ghostty, or tmux dependency.
+`BecomeMonitor`. Everything runs locally. Coding agents, Ghostty, and tmux
+are not required dependencies.
 
 On an otherwise supported Omarchy install, install any missing Python bindings:
 
@@ -88,16 +78,15 @@ On an otherwise supported Omarchy install, install any missing Python bindings:
 omarchy pkg add python-dbus python-gobject
 ```
 
-## Installation — get in, darling
+## Installation
 
 For a versioned installation, download the archive and `SHA256SUMS` from the
 [latest release](https://github.com/clickety-clacks/yoohoo/releases/latest),
 then follow that release's checksum, extraction, and install instructions.
 Each archive includes the installer and default sound. No Git checkout required.
 
-Or install the development version from the repository:
-
-Run as your desktop user, **not root**:
+Or install the development version from the repository. Run as your desktop
+user, **not root**:
 
 ```bash
 git clone https://github.com/clickety-clacks/yoohoo.git
@@ -110,12 +99,13 @@ personal settings, adds a Hyprland include and bar entry if absent, enables
 the user service, and reloads the desktop integration. It does not install
 packages or replace your desktop configuration with somebody else's dotfiles.
 Changed existing files are backed up under `~/.local/state/yoohoo/backups/`.
-If activation fails, inspect the reported error and backups; the installer
-does not claim transactional rollback.
+There is no automatic rollback. If activation fails, inspect the reported
+error; the backups contain the files from before installation.
 
-Reinstall/update with the same command after `git pull --ff-only`. A service
-restart clears current pending attention; history remains. Shell restart is
-intentional: plugin hot reload has previously left duplicate IPC handlers.
+To update a Git checkout, run `git pull --ff-only`, then the install command
+again. Restarting the service clears pending attention; history stays. The
+installer also restarts the shell because hot-reloading the plugin has
+previously left duplicate menu handlers running.
 
 **Chezmoi users:** these are ordinary user files at stable paths. Chezmoi can
 continue tracking them. After an update, inspect `chezmoi diff` and capture
@@ -123,8 +113,8 @@ the intended changes; otherwise a later apply may restore older versions.
 
 ## The dressing room
 
-Yoohoo retains the established `window-attention` technical filenames so
-existing installations and dotfile tracking continue to work.
+Stage name Yoohoo, filename `window-attention`. The files keep the original
+name so existing installs and dotfile tracking keep working.
 
 | Location | What lives there |
 | --- | --- |
@@ -154,22 +144,23 @@ history_enabled = true
 desktop_notifications_enabled = true
 ```
 
-Restart `window-attention.service` after changing daemon settings. For
-rendering changes, edit `attention.lua`, run `hyprctl reload`, and check
+Restart `window-attention.service` after changing daemon settings. Disable
+sound if you prefer a silent entrance. Disabling desktop-notification capture
+leaves native urgency active.
+
+For rendering changes, edit `attention.lua`, run `hyprctl reload`, and check
 `hyprctl configerrors`. The border breathes over a 3.6-second cycle: a
 1.6-second rise, a 1.6-second fall, and a 0.4-second rest. Hyprland renders an
 ease-in-out-sine approximation using a cubic Bezier with control points
 `(0.37, 0)` and `(0.63, 1)`. Its shared `border` animation leaf also softens
-ordinary focus-border color changes; this is not a per-window animation override.
-Disable sound if you prefer a silent
-entrance; disabling desktop-notification capture leaves native urgency active.
+ordinary focus-border color changes. This setting applies to all window borders.
 
 The shape is inspired by Apple's [breathing status LED patent](https://patents.google.com/patent/US6658577B2/en):
 a biased sinusoidal brightness envelope with a quiet interval. The patent's
 example uses a 1.8-second overall period and a 0.4-second quiet interval;
 Yoohoo deliberately uses a slower cycle, adapted to theme colors rather than
-LED brightness. This is an approximation, not a claim to reproduce every
-Mac model's shipping firmware. The corresponding normalized fade is
+LED brightness. It approximates the patent's curve; actual Mac firmware may
+use different timing or curves. The corresponding normalized fade is
 `f(u) = (1 - cos(pi * u)) / 2` for `u` from 0 to 1.
 
 ## How she knows
@@ -188,16 +179,17 @@ reads the list. Only an explicit menu selection requests focus.
 
 ### Even a diva has boundaries
 
-- A helper like `notify-send`, a proxy, a disconnected sender, or a process
-  owning several windows may not resolve. These notifications are skipped,
-  not guessed. Native urgency still works if that application emits it.
+- Some notification senders can't be matched to a window: `notify-send` and
+  similar helpers, proxies, disconnected senders, and processes that own
+  several windows. Yoohoo skips those notifications. Native urgency still
+  works if the application emits it.
 - A finished job that emits neither signal cannot be detected. Yoohoo does
   not watch agent lifecycles or infer completion from terminal text.
 - If an app emits both inputs, the count may increase twice. It counts
   **signals**, not tasks; repeated signals do not replay the sound.
 - Hyprland's foreign-toplevel activation can bypass its ordinary activation
-  policy (window switchers need this). Yoohoo never invokes it automatically;
-  this is not a universal firewall against every possible focus change.
+  policy (window switchers need this). Yoohoo never invokes it automatically,
+  but cannot stop other tools from doing so.
 - Already-focused windows are ignored. Orderly service stops clear pending
   entries. Crash recovery requires matching addresses and stable window IDs.
 - Notification payload text is not stored, but history includes **window
@@ -228,8 +220,8 @@ python -B ~/.local/share/window-attention/test_attention.py
 ```
 
 Automated tests cover daemon state/race handling and staged installation,
-reinstallation, config preservation, and removal. They do **not** simulate
-a complete compositor or prove every Omarchy release compatible. Live checks
+reinstallation, config preservation, and removal. Desktop behavior and
+compatibility with other Omarchy versions require live testing. Live checks
 on the original deployment exercised both native urgency and real terminal
 desktop notifications, unchanged focus, sound playback, interpolated border
 pixels, menu selection, acknowledgement, and shutdown cleanup.
@@ -238,8 +230,8 @@ For a native terminal check, arrange a delayed BEL in a terminal that supports
 compositor attention, switch away before it fires, then acknowledge it through
 the bell menu. A passive diagnostic is included at
 `~/.local/share/window-attention/notification_probe.py`; it logs sender identity,
-not notification content. Never automatically invoke notification actions to
-try to discover their target windows.
+not notification content. Neither the diagnostic nor Yoohoo invokes a
+notification action to discover its target window.
 
 ## Take a bow
 
@@ -249,9 +241,9 @@ python install.py uninstall
 
 Stops/disables the service, removes attention integrations and unchanged
 package files, and retains personal settings, event history, backups, and
-modified files. It refuses to guess without its install record. Empty parent
-directories may remain. Chezmoi users should also update their tracked state
-if they don't want a later restore to reinstall Yoohoo.
+modified files. Uninstallation requires its install record. Empty parent
+directories may remain. Chezmoi users, update your tracked state too, or a
+later restore will bring Yoohoo right back.
 
 For file-only staging or testing, use `--home /path/to/staged-home --no-activate`.
 That home must contain a supported `hyprland.lua` and `shell.json`; no real
@@ -269,4 +261,4 @@ Independent of the Omarchy project.
 
 Maintainers: [how to cut a release](RELEASING.md).
 
-**Your windows may crave attention. Your focus is still yours.** 💅
+**They can wait, darling.** 💅
