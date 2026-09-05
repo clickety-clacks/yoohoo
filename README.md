@@ -147,9 +147,21 @@ desktop_notifications_enabled = true
 
 Restart `window-attention.service` after changing daemon settings. For
 rendering changes, edit `attention.lua`, run `hyprctl reload`, and check
-`hyprctl configerrors`. The border alternates every 900ms; Hyprland's border
-animation supplies the interpolation. Disable sound if you prefer a silent
+`hyprctl configerrors`. The border breathes over a 3.6-second cycle: a
+1.6-second rise, a 1.6-second fall, and a 0.4-second rest. Hyprland renders an
+ease-in-out-sine approximation using a cubic Bezier with control points
+`(0.37, 0)` and `(0.63, 1)`. Its shared `border` animation leaf also softens
+ordinary focus-border color changes; this is not a per-window animation override.
+Disable sound if you prefer a silent
 entrance; disabling desktop-notification capture leaves native urgency active.
+
+The shape is inspired by Apple's [breathing status LED patent](https://patents.google.com/patent/US6658577B2/en):
+a biased sinusoidal brightness envelope with a quiet interval. The patent's
+example uses a 1.8-second overall period and a 0.4-second quiet interval;
+Yoohoo deliberately uses a slower cycle, adapted to theme colors rather than
+LED brightness. This is an approximation, not a claim to reproduce every
+Mac model's shipping firmware. The corresponding normalized fade is
+`f(u) = (1 - cos(pi * u)) / 2` for `u` from 0 to 1.
 
 ## How she knows
 

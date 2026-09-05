@@ -17,6 +17,20 @@ loader.exec_module(attention)
 
 
 class AttentionTests(unittest.TestCase):
+    def test_breath_has_slow_fades_and_quiet_interval(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"XDG_STATE_HOME": directory}
+        ), patch.object(attention, "get_clients", return_value=[]):
+            service = attention.AttentionService()
+            delays = []
+            def tick(delay):
+                delays.append(delay)
+                if len(delays) == 2:
+                    service.running = False
+            with patch.object(attention.time, "sleep", side_effect=tick):
+                service.pulse()
+            self.assertEqual(delays, [1.6, 2.0])
+
     def test_sound_cooldown_is_shared_between_service_instances(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {"XDG_STATE_HOME": directory}

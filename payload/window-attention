@@ -19,6 +19,9 @@ import tomllib
 
 TAG = "window-attention"
 PULSE_TAG = "window-attention-pulse"
+# Keep the fade duration aligned with speed=16 (deciseconds) in attention.lua.
+PULSE_FADE_SECONDS = 1.6
+PULSE_REST_SECONDS = 0.4
 VERSION = 1
 
 
@@ -386,7 +389,7 @@ class AttentionService:
                             tag_window_with_name(address, PULSE_TAG, bright)
             except (OSError, subprocess.SubprocessError, ValueError) as error:
                 self.log(f"pulse temporarily unavailable: {error}")
-            time.sleep(0.9)
+            time.sleep(PULSE_FADE_SECONDS + (0 if bright else PULSE_REST_SECONDS))
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, self.stop)

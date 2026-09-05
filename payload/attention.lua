@@ -27,14 +27,19 @@ end
 local inactive_border = paired_border(hl.get_config("general.col.inactive_border"))
 local active_border = paired_border(hl.get_config("general.col.active_border"))
 
+-- Ease-in-out-sine approximation: zero slope at each end of each breath.
+-- Hyprland shares this animation leaf with ordinary focus-border changes.
+-- speed is in deciseconds; keep aligned with PULSE_FADE_SECONDS in the daemon.
+hl.curve("yoohooBreath", { type = "bezier", points = { { 0.37, 0 }, { 0.63, 1 } } })
+hl.animation({ leaf = "border", enabled = true, speed = 16, bezier = "yoohooBreath" })
+
 o.window({ tag = "window-attention" }, {
   border_size = 5,
   border_color = inactive_border,
 })
 
--- The service toggles this second static tag every 900ms. Hyprland's existing
--- `border` animation interpolates each transition, producing a whole-border
--- pulse between the current theme's inactive and active border colors.
+-- 1.6s inhale, 1.6s exhale, 0.4s rest at the inactive theme color (3.6s total).
+-- The service toggles this tag; Hyprland renders the smooth curve each frame.
 o.window({ tag = "window-attention-pulse" }, {
   border_size = 5,
   border_color = active_border,
