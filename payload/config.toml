@@ -1,0 +1,9 @@
+# User-facing policy for the Window Attention subsystem.
+sound_enabled = true
+sound_path = "~/.local/share/sounds/window-attention/soft-ui-pop.mp3"
+sound_volume = 0.35
+sound_cooldown_ms = 1500
+history_enabled = true
+# Supplement native urgency with standard D-Bus notifications, only when the
+# authenticated sender PID owns exactly one compositor window.
+desktop_notifications_enabled = true

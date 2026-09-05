@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""Track Hyprland urgency without allowing attention requests to steal focus."""
+
+from __future__ import annotations
+
+import argparse
+from contextlib import contextmanager
+import fcntl
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+import tomllib
+
+TAG = "window-attention"
+PULSE_TAG = "window-attention-pulse"
+VERSION = 1
+
+
+def config_path() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "window-attention/config.toml"
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "window-attention"
+
+
+def load_config() -> dict:
+    defaults = {
+        "sound_enabled": True,
+        "sound_path": str(Path.home() / ".local/share/sounds/window-attention/soft-ui-pop.mp3"),
+        "sound_volume": 0.35,
+        "sound_cooldown_ms": 1500,
+        "history_enabled": True,
+        "desktop_notifications_enabled": True,
+    }
+    try:
+        with config_path().open("rb") as handle:
+            defaults.update(tomllib.load(handle))
+    except FileNotFoundError:
+        pass
+    return defaults
+
+
+def hypr_json(command: str) -> object:
+    result = subprocess.run(
+        ["hyprctl", "-j", command], check=True, text=True, capture_output=True, timeout=3
+    )
+    return json.loads(result.stdout)
+
+
+def hypr_dispatch(expression: str) -> None:
+    subprocess.run(
+        ["hyprctl", "dispatch", expression],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=3,
+    )
+
+
+def normalize_address(address: str) -> str:
+    address = address.strip()
+    if not address:
+        return ""
+    return address if address.startswith("0x") else f"0x{address}"
+
+
+def get_clients() -> list[dict]:
+    value = hypr_json("clients")
+    return value if isinstance(value, list) else []
+
+
+def client_for(address: str) -> dict | None:
+    address = normalize_address(address)
+    for client in get_clients():
+        if client.get("address") == address:
+            return client
+    return None
+
+
+def active_address() -> str:
+    value = hypr_json("activewindow")
+    return normalize_address(str(value.get("address", ""))) if isinstance(value, dict) else ""
+
+
+def unique_window_for_pid(pid: int, clients: list[dict]) -> str:
+    matches = [c for c in clients if pid > 0 and c.get("pid") == pid]
+    return str(matches[0].get("address", "")) if len(matches) == 1 else ""
+
+
+def tag_window_with_name(address: str, tag: str, enabled: bool) -> None:
+    prefix = "+" if enabled else "-"
+    expression = (
+        f'hl.dsp.window.tag({{ tag = "{prefix}{tag}", '
+        f'window = "address:{normalize_address(address)}" }})'
+    )
+    hypr_dispatch(expression)
+
+
+def tag_window(address: str, enabled: bool) -> None:
+    tag_window_with_name(address, TAG, enabled)
+
+
+def focus_window(address: str) -> None:
+    expression = f'hl.dsp.focus({{ window = "address:{normalize_address(address)}" }})'
+    hypr_dispatch(expression)
+
+
+def public_client(client: dict, previous: dict | None = None) -> dict:
+    now = time.time()
+    workspace = client.get("workspace") or {}
+    return {
+        "address": normalize_address(str(client.get("address", ""))),
+        "stable_id": str(client.get("stableId", "")),
+        "class": str(client.get("class", "")),
+        "title": str(client.get("title", "")),
+        "workspace_id": workspace.get("id"),
+        "workspace": str(workspace.get("name", "")),
+        "first_attention_at": previous.get("first_attention_at", now) if previous else now,
+        "last_attention_at": now,
+        "count": int(previous.get("count", 0)) + 1 if previous else 1,
+    }
+
+
+class AttentionService:
+    def __init__(self) -> None:
+        self.config = load_config()
+        self.windows: dict[str, dict] = {}
+        self.running = True
+        self.connection: socket.socket | None = None
+        self.directory = state_dir()
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.current_path = self.directory / "current.json"
+        self.history_path = self.directory / "history.jsonl"
+        self.lock_path = self.directory / "state.lock"
+        self.thread_lock = threading.RLock()
+        self.notification_loop = None
+        self.fatal_error = False
+
+    @contextmanager
+    def state_lock(self):
+        with self.thread_lock, self.lock_path.open("a", encoding="utf-8") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            self.reload_state()
+            yield
+
+    def reload_state(self) -> None:
+        payload = read_state()
+        self.windows = {
+            normalize_address(str(item.get("address", ""))): item
+            for item in payload.get("windows", [])
+            if item.get("address")
+        }
+
+    def log(self, message: str) -> None:
+        print(message, flush=True)
+
+    def record(self, event: str, window: dict) -> None:
+        if not self.config.get("history_enabled", True):
+            return
+        entry = {"version": VERSION, "event": event, "at": time.time(), "window": window}
+        with self.history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, separators=(",", ":")) + "\n")
+
+    def write_state(self) -> None:
+        payload = {
+            "version": VERSION,
+            "updated_at": time.time(),
+            "windows": sorted(
+                self.windows.values(), key=lambda item: item["last_attention_at"], reverse=True
+            ),
+        }
+        temporary = self.current_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(self.current_path)
+
+    def play_sound(self) -> None:
+        if not self.config.get("sound_enabled", True):
+            return
+        now = time.monotonic()
+        cooldown = float(self.config.get("sound_cooldown_ms", 1500)) / 1000.0
+        path = Path(os.path.expanduser(str(self.config.get("sound_path", ""))))
+        if not path.is_file():
+            self.log(f"sound file missing: {path}")
+            return
+        volume = max(0.0, min(1.0, float(self.config.get("sound_volume", 0.35))))
+        with (self.directory / "sound.lock").open("a+", encoding="utf-8") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            handle.seek(0)
+            try:
+                previous = float(handle.read() or "0")
+            except ValueError:
+                previous = 0
+            # Monotonic timestamps are shared by local processes; a timestamp
+            # from a previous boot in the future must not suppress playback.
+            if 0 < previous <= now and now - previous < cooldown:
+                return
+            player = subprocess.Popen(
+                ["pw-play", "--volume", str(volume), str(path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(now))
+            handle.flush()
+        def report_playback():
+            result = player.wait()
+            self.log(f"sound playback {'completed' if result == 0 else 'failed'}: exit={result}")
+        threading.Thread(target=report_playback, name="attention-sound", daemon=True).start()
+
+    def restore_tags(self) -> None:
+        with self.state_lock():
+            live = {client.get("address"): client for client in get_clients()}
+            self.windows = {
+                address: item for address, item in self.windows.items()
+                if address in live and item.get("stable_id")
+                and item["stable_id"] == str(live[address].get("stableId", ""))
+            }
+            focused = active_address()
+            self.windows.pop(focused, None)
+            for client in live.values():
+                address = client["address"]
+                if address in self.windows:
+                    tag_window(address, True)
+                else:
+                    # Disk state plus stable identity is authoritative. Tags
+                    # alone may be residue from an interrupted pulse/clear.
+                    for tag in (TAG, PULSE_TAG):
+                        if tag in (client.get("tags") or []):
+                            tag_window_with_name(address, tag, False)
+            self.write_state()
+
+    def attend(self, raw_address: str, source: str = "native-urgency") -> None:
+        address = normalize_address(raw_address)
+        if not address or address == active_address():
+            return
+        client = client_for(address)
+        if not client:
+            return
+        with self.state_lock():
+            if not self.running or address == active_address():
+                return
+            previous = self.windows.get(address)
+            item = public_client(client, previous)
+            item["source"] = source
+            self.windows[address] = item
+            tag_window(address, True)
+            self.record("attention", item)
+            self.write_state()
+            if previous is None:
+                self.play_sound()
+        self.log(f'attention: {item["class"]} — {item["title"]}')
+
+    def clear(self, raw_address: str, reason: str) -> None:
+        address = normalize_address(raw_address)
+        with self.state_lock():
+            item = self.windows.pop(address, None)
+            if not item:
+                return
+            if reason != "closed" and client_for(address):
+                tag_window(address, False)
+                tag_window_with_name(address, PULSE_TAG, False)
+            self.record(reason, item)
+            self.write_state()
+        self.log(f'{reason}: {item["class"]} — {item["title"]}')
+
+    def refresh_window(self, raw_address: str) -> None:
+        address = normalize_address(raw_address.split(",", 1)[0])
+        with self.state_lock():
+            previous = self.windows.get(address)
+            if not previous:
+                return
+            client = client_for(address)
+            if not client:
+                return
+            updated = public_client(client, previous)
+            updated["first_attention_at"] = previous["first_attention_at"]
+            updated["last_attention_at"] = previous["last_attention_at"]
+            updated["count"] = previous["count"]
+            if "source" in previous:
+                updated["source"] = previous["source"]
+            self.windows[address] = updated
+            self.write_state()
+
+    def handle(self, line: str) -> None:
+        event, separator, data = line.rstrip("\n").partition(">>")
+        if not separator:
+            return
+        if event == "urgent":
+            self.attend(data)
+        elif event == "activewindowv2":
+            self.clear(data, "focused")
+        elif event == "closewindow":
+            self.clear(data, "closed")
+        elif event in {"windowtitle", "windowtitlev2", "movewindow", "movewindowv2"}:
+            self.refresh_window(data)
+
+    def socket_path(self) -> Path | None:
+        runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+        signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+        direct = runtime / "hypr" / signature / ".socket2.sock"
+        if signature and direct.exists():
+            return direct
+        candidates = sorted((runtime / "hypr").glob("*/.socket2.sock"), key=lambda p: p.stat().st_mtime)
+        return candidates[-1] if candidates else None
+
+    def stop(self, *_args: object) -> None:
+        self.running = False
+        if self.notification_loop is not None:
+            self.notification_loop.quit()
+        if self.connection is not None:
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    def notifications(self) -> None:
+        """Observe standard notifications; never invoke a sender's actions."""
+        try:
+            import dbus
+            from dbus.mainloop.glib import DBusGMainLoop
+            from gi.repository import GLib
+
+            mainloop = DBusGMainLoop()
+            lookup = dbus.SessionBus(private=True, mainloop=mainloop)
+            monitor = dbus.SessionBus(private=True, mainloop=mainloop)
+            credentials = dbus.Interface(lookup.get_object(
+                "org.freedesktop.DBus", "/org/freedesktop/DBus"), "org.freedesktop.DBus")
+
+            def received(connection, message):
+                if (message.get_interface() != "org.freedesktop.Notifications"
+                        or message.get_member() != "Notify"):
+                    return
+                try:
+                    pid = int(credentials.GetConnectionUnixProcessID(message.get_sender(), timeout=2))
+                    address = unique_window_for_pid(pid, get_clients())
+                    if not address:
+                        self.log(f"notification unresolved: pid={pid}, no unique window")
+                        return
+                    self.attend(address, "desktop-notification")
+                except Exception as error:
+                    self.log(f"notification error: {error}")
+
+            monitor.add_message_filter(received)
+            monitor.call_blocking("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                "org.freedesktop.DBus.Monitoring", "BecomeMonitor", "asu",
+                (["type='method_call',interface='org.freedesktop.Notifications',member='Notify'"], 0))
+            self.notification_loop = GLib.MainLoop()
+            self.log("listening for standard desktop notifications (unique sender PID mapping)")
+            if self.running:
+                self.notification_loop.run()
+            monitor.close()
+            lookup.close()
+        except Exception as error:
+            self.log(f"desktop notification monitor unavailable: {error}")
+            # An enabled input failing must not leave a deceptively healthy
+            # service. Let systemd report failure and apply its restart policy.
+            self.fatal_error = True
+            self.stop()
+
+    def pulse(self) -> None:
+        bright = False
+        while self.running:
+            bright = not bright
+            # Serialize with focus/close and CLI updates. Otherwise a stale
+            # snapshot can re-add the pulse tag after clear() removes it.
+            try:
+                with self.state_lock():
+                    if not self.running:
+                        break
+                    live = {c["address"]: c for c in get_clients()}
+                    for address in list(self.windows):
+                        if address not in live:
+                            self.record("closed", self.windows.pop(address))
+                            self.write_state()
+                            continue
+                        if address:
+                            tag_window_with_name(address, PULSE_TAG, bright)
+            except (OSError, subprocess.SubprocessError, ValueError) as error:
+                self.log(f"pulse temporarily unavailable: {error}")
+            time.sleep(0.9)
+
+    def run(self) -> int:
+        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGINT, self.stop)
+        if self.config.get("desktop_notifications_enabled", True):
+            threading.Thread(target=self.notifications, name="attention-notifications", daemon=True).start()
+        threading.Thread(target=self.pulse, name="attention-pulse", daemon=True).start()
+        while self.running:
+            path = self.socket_path()
+            if not path:
+                self.log("waiting for Hyprland event socket")
+                time.sleep(1)
+                continue
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                    self.connection = connection
+                    connection.connect(str(path))
+                    self.restore_tags()
+                    self.log(f"listening on {path}")
+                    with connection.makefile("r", encoding="utf-8", errors="replace") as stream:
+                        while self.running:
+                            line = stream.readline()
+                            if not line:
+                                break
+                            try:
+                                self.handle(line)
+                            except Exception as error:  # keep one malformed event from killing the service
+                                self.log(f"event error: {error}")
+                    self.connection = None
+            except (OSError, subprocess.SubprocessError, ValueError) as error:
+                self.log(f"event socket unavailable: {error}")
+            if self.running:
+                time.sleep(1)
+        self.cleanup()
+        return 1 if self.fatal_error else 0
+
+    def cleanup(self) -> None:
+        """Remove presentation and pending entries on an orderly service stop."""
+        with self.state_lock():
+            for address, item in list(self.windows.items()):
+                for tag in (TAG, PULSE_TAG):
+                    try:
+                        tag_window_with_name(address, tag, False)
+                    except (OSError, subprocess.SubprocessError) as error:
+                        self.log(f"shutdown tag cleanup failed: {address}: {error}")
+                self.record("service-stopped", item)
+            self.windows.clear()
+            self.write_state()
+
+
+def read_state() -> dict:
+    path = state_dir() / "current.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"version": VERSION, "updated_at": None, "windows": []}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("daemon", help="listen for Hyprland attention events")
+    subparsers.add_parser("list", help="print the current attention list as JSON")
+    focus = subparsers.add_parser("focus", help="focus an attention-needing window")
+    focus.add_argument("address")
+    clear = subparsers.add_parser("clear", help="clear attention without focusing a window")
+    clear.add_argument("address")
+    subparsers.add_parser("play-sound", help="audition the configured attention sound")
+    arguments = parser.parse_args()
+
+    if arguments.command == "daemon":
+        return AttentionService().run()
+    if arguments.command == "list":
+        print(json.dumps(read_state(), indent=2))
+        return 0
+    if arguments.command == "focus":
+        focus_window(arguments.address)
+        return 0
+    if arguments.command == "clear":
+        AttentionService().clear(arguments.address, "cleared")
+        return 0
+    if arguments.command == "play-sound":
+        service = AttentionService()
+        service.play_sound()
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

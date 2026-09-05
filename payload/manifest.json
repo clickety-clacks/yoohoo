@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "window-attention.indicator",
+  "name": "Yoohoo",
+  "version": "1.0.0",
+  "author": "Mike",
+  "description": "A little drama. Zero focus theft. Courteous window attention for Omarchy.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Yoohoo",
+    "description": "Shows and opens windows that have requested attention.",
+    "category": "System",
+    "aliases": ["attention", "urgent-windows"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {}
+  }
+}
