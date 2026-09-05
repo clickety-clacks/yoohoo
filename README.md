@@ -21,8 +21,18 @@ and a guest list of windows waiting for their moment.
 Your terminal finishes. Your application needs you. Your cursor is halfway
 through something important. This is not the moment for a hostile takeover.
 
-Yoohoo gives attention-seeking windows a little stage presence, then lets
-**you** decide when to acknowledge them.
+Yoohoo listens for applications requesting your attention and marks the window
+that needs you without switching your workspace or taking focus away from what
+you're doing. Its border softly pulses in your theme's colors, a gentle pop
+plays, and the window joins a list in your bar's bell menu. When you're ready,
+select it from the menu to go there, or focus it yourself; either way, the
+attention marker clears and its normal border returns. Closing the window
+clears it too. A local history keeps a record of the requests, so the drama
+doesn't have to disappear without receipts.
+
+**Ready?** Start with [requirements](#requirements--before-the-entrance) and
+[installation](#installation--get-in-darling). [Settings](#the-dressing-room),
+[verification](#receipts-please), and [uninstallation](#take-a-bow) are below too.
 
 ## She's got range
 
@@ -38,7 +48,7 @@ Yoohoo gives attention-seeking windows a little stage presence, then lets
 - **Manners.** No automatic notification clicks. No agent hooks. No tmux
   inference. No pretending every desktop notification identifies a window.
 
-## Before the entrance
+## Requirements — before the entrance
 
 This is an **early per-user integration for Lua-based Omarchy**, not a
 universal Hyprland extension or an official Omarchy component. The desktop
@@ -58,7 +68,7 @@ On an otherwise supported Omarchy install, install any missing Python bindings:
 omarchy pkg add python-dbus python-gobject
 ```
 
-## Get in, darling
+## Installation — get in, darling
 
 Run as your desktop user, **not root**:
 
