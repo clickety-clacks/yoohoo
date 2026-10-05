@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plumbus-only cross-product check: real Hub binary and Yoohoo subscriber.
+"""Testbed-only cross-product check: real Hub binary and Yoohoo subscriber.
 
 HUB_HEALTH_BINARY selects an already built Hub. All roster input is synthetic;
 an owned SSH stub replaces transport, so no real agents or network hosts are
@@ -55,7 +55,7 @@ def cleanup_stub(identity):
         os.close(descriptor)
 
 
-@unittest.skipUnless(os.environ.get("HUB_HEALTH_BINARY"), "requires built Hub on Plumbus")
+@unittest.skipUnless(os.environ.get("HUB_HEALTH_BINARY"), "requires built Hub on Testbed")
 class RealHubHealthTests(unittest.TestCase):
     def test_quiet_real_hub_heartbeat_preserves_roster_and_activity(self):
         binary = Path(os.environ["HUB_HEALTH_BINARY"]).resolve(strict=True)

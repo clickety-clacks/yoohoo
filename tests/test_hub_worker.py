@@ -25,7 +25,7 @@ def load_daemon(name: str):
     return daemon
 
 
-def agent(*, machine="gibson", state="needs_attention"):
+def agent(*, machine="atlas", state="needs_attention"):
     return {
         "machine": machine,
         "instanceId": "worker-instance",
@@ -44,7 +44,7 @@ def candidate():
         },
         "target": {
             "identity": {
-                "machine": "gibson", "instanceId": "worker-instance",
+                "machine": "atlas", "instanceId": "worker-instance",
                 "pid": 42, "startTimeTicks": "99",
             },
             "location": {"kind": "tmux", "tmux": {
@@ -62,7 +62,7 @@ def candidate():
 class FakeHub:
     enabled = True
     connected = True
-    config = {"machine": "osanwe"}
+    config = {"machine": "lumen"}
 
     def __init__(self, item):
         self.item = item
@@ -225,7 +225,7 @@ class WorkerTests(unittest.TestCase):
         class EmptyHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
 
             def snapshot(self):
                 return {"agents": [], "sources": []}
@@ -303,9 +303,9 @@ class WorkerTests(unittest.TestCase):
 
     def test_explicit_focus_revalidation_bypasses_passive_fingerprint_skip(self):
         daemon = load_daemon("window_attention_worker_focus_bypass_test")
-        item = agent(machine="osanwe")
+        item = agent(machine="lumen")
         proof = candidate()
-        proof["target"]["identity"]["machine"] = "osanwe"
+        proof["target"]["identity"]["machine"] = "lumen"
         identity = daemon.agent_identity(item)
         address = "0xabc"
         probe_started = threading.Event()
@@ -616,9 +616,9 @@ class WorkerTests(unittest.TestCase):
 
     def test_focused_hub_window_revalidates_before_acknowledgement(self):
         daemon = load_daemon("window_attention_worker_focus_test")
-        item = agent(machine="osanwe")
+        item = agent(machine="lumen")
         proof = candidate()
-        proof["target"]["identity"]["machine"] = "osanwe"
+        proof["target"]["identity"]["machine"] = "lumen"
         address = "0xabc"
         cleared = threading.Event()
 
@@ -660,9 +660,9 @@ class WorkerTests(unittest.TestCase):
 
     def test_focus_revalidation_does_not_ack_newer_activity_epoch(self):
         daemon = load_daemon("window_attention_worker_epoch_test")
-        item = agent(machine="osanwe")
+        item = agent(machine="lumen")
         proof = candidate()
-        proof["target"]["identity"]["machine"] = "osanwe"
+        proof["target"]["identity"]["machine"] = "lumen"
         probe_started = threading.Event()
         release_probe = threading.Event()
         tags = []
@@ -703,9 +703,9 @@ class WorkerTests(unittest.TestCase):
 
     def test_focus_queue_captures_epoch_before_worker_slot(self):
         daemon = load_daemon("window_attention_worker_queued_epoch_test")
-        item = agent(machine="osanwe")
+        item = agent(machine="lumen")
         proof = candidate()
-        proof["target"]["identity"]["machine"] = "osanwe"
+        proof["target"]["identity"]["machine"] = "lumen"
         refresh_started = threading.Event()
         release_refresh = threading.Event()
         operations = []

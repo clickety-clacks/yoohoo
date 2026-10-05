@@ -57,32 +57,32 @@ class CapabilityRecordTests(unittest.TestCase):
         }}
 
     def test_observation_is_recorded_apart_from_the_config_and_read_back(self):
-        self.assertTrue(hub.record_capabilities(self.state, "Gibson.", self.response(), now_ms=1000))
-        path = self.state / "transport-capabilities/gibson.json"
+        self.assertTrue(hub.record_capabilities(self.state, "Atlas.", self.response(), now_ms=1000))
+        path = self.state / "transport-capabilities/atlas.json"
         self.assertTrue(path.is_file())
-        self.assertEqual(hub.read_capabilities(self.state, "gibson", now_ms=2000), {
+        self.assertEqual(hub.read_capabilities(self.state, "atlas", now_ms=2000), {
             "ssh": "available", "et": "available", "mosh": "unavailable", "etPort": 4022,
         })
 
     def test_unreachable_host_never_overwrites_what_was_learned(self):
-        hub.record_capabilities(self.state, "gibson", self.response(), now_ms=1000)
+        hub.record_capabilities(self.state, "atlas", self.response(), now_ms=1000)
         self.assertFalse(hub.record_capabilities(
-            self.state, "gibson", self.response("unreachable"), now_ms=1500))
-        self.assertEqual(hub.read_capabilities(self.state, "gibson", now_ms=2000)["et"], "available")
+            self.state, "atlas", self.response("unreachable"), now_ms=1500))
+        self.assertEqual(hub.read_capabilities(self.state, "atlas", now_ms=2000)["et"], "available")
 
     def test_old_or_missing_record_means_probe_again(self):
-        self.assertIsNone(hub.read_capabilities(self.state, "gibson"))
-        hub.record_capabilities(self.state, "gibson", self.response(), now_ms=0)
+        self.assertIsNone(hub.read_capabilities(self.state, "atlas"))
+        hub.record_capabilities(self.state, "atlas", self.response(), now_ms=0)
         self.assertIsNone(hub.read_capabilities(
-            self.state, "gibson", now_ms=hub.CAPABILITY_MAX_AGE_MS + 1))
+            self.state, "atlas", now_ms=hub.CAPABILITY_MAX_AGE_MS + 1))
 
     def test_all_unknown_record_lasts_a_day(self):
         response = {"transports": {"state": "partial", **{
             name: {"state": "unknown", "code": "probe_failed"} for name in ("ssh", "et", "mosh")}}}
-        hub.record_capabilities(self.state, "gibson", response, now_ms=0)
-        self.assertIsNotNone(hub.read_capabilities(self.state, "gibson", now_ms=3600 * 1000))
+        hub.record_capabilities(self.state, "atlas", response, now_ms=0)
+        self.assertIsNotNone(hub.read_capabilities(self.state, "atlas", now_ms=3600 * 1000))
         self.assertIsNone(hub.read_capabilities(
-            self.state, "gibson", now_ms=hub.UNKNOWN_CAPABILITY_MAX_AGE_MS + 1))
+            self.state, "atlas", now_ms=hub.UNKNOWN_CAPABILITY_MAX_AGE_MS + 1))
 
     def test_unsafe_host_has_no_record_path(self):
         for host in ("../x", "a/b", "-x;y", ".."):
@@ -90,20 +90,20 @@ class CapabilityRecordTests(unittest.TestCase):
                 self.assertFalse(hub.record_capabilities(self.state, host, self.response()))
 
     def test_recorded_et_capability_selects_et_with_its_port(self):
-        hub.record_capabilities(self.state, "gibson", self.response())
+        hub.record_capabilities(self.state, "atlas", self.response())
         plan = hub.connection_plan(
-            "gibson", "ask", "osanwe", [], which=lambda name: "/bin/" + name,
-            capabilities=hub.read_capabilities(self.state, "gibson"),
+            "atlas", "ask", "lumen", [], which=lambda name: "/bin/" + name,
+            capabilities=hub.read_capabilities(self.state, "atlas"),
         )
         self.assertEqual((plan["transport"], plan["fallback"], plan["etPort"]), ("et", "ssh", 4022))
-        argv = hub.build_launch_argv({"machine": "gibson", "tmux": {"session": "ask"}},
-                                     plan, "osanwe", "/s/gibson.json")
+        argv = hub.build_launch_argv({"machine": "atlas", "tmux": {"session": "ask"}},
+                                     plan, "lumen", "/s/atlas.json")
         self.assertEqual(argv[-1], "et")
         self.assertEqual(hub.parse_remote_launch(argv),
-                         {"transport": "et", "host": "gibson", "session": "ask"})
+                         {"transport": "et", "host": "atlas", "session": "ask"})
 
     def test_without_a_record_auto_keeps_mosh_first(self):
-        plan = hub.connection_plan("gibson", "ask", "osanwe", [], which=lambda name: "/bin/" + name)
+        plan = hub.connection_plan("atlas", "ask", "lumen", [], which=lambda name: "/bin/" + name)
         self.assertEqual(plan["transport"], "mosh")
 
 

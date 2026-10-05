@@ -22,13 +22,13 @@ spec.loader.exec_module(hub)
 
 def _agent(state: str = "idle", observed: int = 1000) -> dict:
     return {
-        "machine": "osanwe",
+        "machine": "lumen",
         "instanceId": "instance-a",
         "id": {"pid": 42, "startTimeTicks": 99},
         "harness": "codex",
         "detectedBy": "proc_comm",
         "presence": {"state": "present", "cause": None},
-        "cwd": {"state": "known", "value": "/home/mike", "cause": None},
+        "cwd": {"state": "known", "value": "~", "cause": None},
         "activity": {"state": state, "source": "hook", "observedAtUnixMs": observed},
         "tty": "pts/8",
         "tmux": {"session": "ask", "windowIndex": 1, "windowName": "mike", "paneId": "%21"},
@@ -44,7 +44,7 @@ def _snapshot(revision: int, state: str = "idle", observed: int = 1000) -> dict:
         "revision": revision,
         "observedAtUnixMs": observed,
         "sources": [{
-            "machine": "osanwe",
+            "machine": "lumen",
             "health": {"state": "reporting", "observedAtUnixMs": observed},
             "instanceId": "instance-a",
             "sourceRevision": revision,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the published Agentd + Hub wire path with one disposable fixture.
 
-This runner is intended for a Plumbus testbed, not the normal unit suite.  It
+This runner is intended for a Testbed testbed, not the normal unit suite.  It
 starts one synthetic process named ``codex`` in a uniquely named tmux session,
 marks that exact Agentd identity ``needs_attention``, and starts agentd-hub on
 the requested loopback port.  A temporary ``tailscale`` stub returns ``{}``
@@ -10,9 +10,9 @@ executes the local Agentd CLI for that one fixture source because this test
 machine may not have SSH-to-self configured.  No real agent process, desktop
 configuration, or service is changed.
 
-Run on Plumbus after installing the published binaries:
+Run on Testbed after installing the published binaries:
 
-    python3 tests/integration/plumbus_hub_wire.py
+    python3 tests/integration/testbed_hub_wire.py
 
 Override paths/port with ``--agentd``, ``--hub``, ``--listen-port``, or
 ``--keep-tmux`` when debugging.  The default cleanup kills only the uniquely
@@ -90,7 +90,7 @@ def run(args: argparse.Namespace) -> None:
     hub_process: subprocess.Popen[str] | None = None
     tmux_created = False
     try:
-        with tempfile.TemporaryDirectory(prefix="yoohoo-plumbus-wire-") as temp:
+        with tempfile.TemporaryDirectory(prefix="yoohoo-testbed-wire-") as temp:
             temp_path = Path(temp)
             bin_path = temp_path / "bin"
             bin_path.mkdir()

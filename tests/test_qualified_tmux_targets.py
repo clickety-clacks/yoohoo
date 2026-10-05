@@ -36,8 +36,8 @@ from agent_window_resolver.collector import (
 )
 
 
-LOCAL = "osanwe"
-REMOTE = "gibson"
+LOCAL = "lumen"
+REMOTE = "atlas"
 SESSION = "review agent (roundtrip)"
 WINDOW = Window("window-1", "0xabc", 100, "20", title="terminal")
 
@@ -219,7 +219,7 @@ class QualifiedTargetParserTests(unittest.TestCase):
 
         mosh = transport_command_hint((
             "mosh-client",
-            "-# -- gibson tmux -L agents attach-session -t "
+            "-# -- atlas tmux -L agents attach-session -t "
             f"={SESSION}:3.%71 |",
             "192.0.2.4", "60001",
         ))
@@ -239,7 +239,7 @@ class QualifiedTargetMatchTests(unittest.TestCase):
                 + shlex.quote("=" + SESSION + ":3.%71"),
             ),
             (
-                "mosh-client", "-# -- gibson tmux -L agents attach-session "
+                "mosh-client", "-# -- atlas tmux -L agents attach-session "
                 f"-t ={SESSION}:3.%71 |", "192.0.2.4", "60001",
             ),
         )

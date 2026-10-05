@@ -1,7 +1,7 @@
 """Opt-in live Yoohoo activation test for the bundled window resolver.
 
 This test is deliberately disabled by default.  When enabled on the isolated
-Plumbus testbed it creates one Ghostty window containing one bounded ``sleep``
+Testbed testbed it creates one Ghostty window containing one bounded ``sleep``
 child, publishes only that child as a synthetic Hub claim, and exercises the
 real AttentionService action path.  It never searches for or closes an
 unrelated window, tmux session, or process.
@@ -148,8 +148,8 @@ def agent_identity(agent: dict) -> str:
 )
 class BundledWindowIntegrationTests(unittest.TestCase):
     def test_owned_ghostty_window_is_focused_without_duplicate_spawn(self):
-        if socket.gethostname() != "plumbus":
-            self.skipTest("live desktop integration is restricted to Plumbus")
+        if os.environ.get("YOOHOO_TESTBED") != "1":
+            self.skipTest("live desktop integration needs YOOHOO_TESTBED=1 on a test machine")
         if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") \
                 or not os.environ.get("WAYLAND_DISPLAY"):
             self.skipTest("Hyprland/Wayland environment is unavailable")

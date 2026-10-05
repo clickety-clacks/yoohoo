@@ -20,7 +20,7 @@ sys.modules[spec.name] = adapter
 spec.loader.exec_module(adapter)
 
 
-def agent(*, machine="gibson", instance="hub-1", pid=42, ticks=99, session="ask", name=None):
+def agent(*, machine="atlas", instance="hub-1", pid=42, ticks=99, session="ask", name=None):
     value = {
         "machine": machine,
         "instanceId": instance,
@@ -51,11 +51,11 @@ class AdapterTests(unittest.TestCase):
                 "stableId": "hypr:0xabc", "address": "0xabc", "pid": 100,
                 "startTimeTicks": "55",
             }],
-            "osanwe",
+            "lumen",
         )
         self.assertIsNotNone(request)
         self.assertEqual(request["target"]["identity"], {
-            "machine": "gibson", "instanceId": "hub-1", "pid": 7,
+            "machine": "atlas", "instanceId": "hub-1", "pid": 7,
             "startTimeTicks": "123",
         })
         self.assertEqual(request["target"]["tmux"]["windowIndex"], "1")
@@ -65,7 +65,7 @@ class AdapterTests(unittest.TestCase):
         resolver = CapturingResolver()
         sentinel_collector = object()
         result = adapter.resolve_agent(
-            agent(), [], "osanwe", resolver=resolver, collector=sentinel_collector
+            agent(), [], "lumen", resolver=resolver, collector=sentinel_collector
         )
         self.assertEqual(result.response["status"], "unresolved")
         self.assertIs(resolver.collector, sentinel_collector)
@@ -96,7 +96,7 @@ class AdapterTests(unittest.TestCase):
                 "stableId": "hypr:0xabc", "address": "0xabc", "pid": 100,
                 "startTimeTicks": "55", "title": "0_1_9 (ticket patrol)",
             }],
-            "osanwe", operation="match",
+            "lumen", operation="match",
         )
         self.assertEqual(request["operation"], "match")
         self.assertEqual(request["target"]["name"], "0_1_9 (ticket patrol)")

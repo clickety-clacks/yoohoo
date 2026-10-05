@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "window-attention.indicator",
   "name": "Yoohoo",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "Mike",
   "description": "Know which windows need you. Get to them when you're ready.",
   "kinds": ["bar-widget"],

@@ -1,7 +1,7 @@
 {
   "upstream": "https://github.com/clickety-clacks/agent-window-resolver",
-  "ref": "et-transport",
-  "commit": "72537778e84733d4c1d1bc0885551da4720a176f",
+  "ref": "main",
+  "commit": "11a85da087d9c7ace18926044156f7322799f42b",
   "syncedOn": "2026-10-05",
   "files": {
     "__init__.py": "8fb20e506c6922c0e8171f31c4a0c6ff297e49a1",
@@ -16,15 +16,15 @@
   "extras": {
     "fixtures/transport-policy-v1.json": {
       "vendoredAt": "tests/fixtures/transport-policy-v1.json",
-      "blob": "75a4bae715c6a1aed11dc932c925e643a1eb6177"
+      "blob": "51c46c0972c21016272f95df01c44a652079fa42"
     },
     "tests/test_tmux_launch_hints.py": {
       "vendoredAt": "tests/test_tmux_launch_hints.py",
-      "blob": "a1db28f6fdb9f15eef1dd7e3acde9d5d7d8a3c28"
+      "blob": "5240d622db6d6f58075f2d53643d612a26923e58"
     },
     "tests/test_qualified_tmux_targets.py": {
       "vendoredAt": "tests/test_qualified_tmux_targets.py",
-      "blob": "238f8d6faaa16c1068740d47267c5e73d6349ccc"
+      "blob": "0f95c1556b119bc3ae5056c0387e453724c9b6d6"
     }
   }
 }

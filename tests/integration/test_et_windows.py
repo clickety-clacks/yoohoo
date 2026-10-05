@@ -16,7 +16,7 @@ It proves, with production Yoohoo code and the bundled resolver:
    the unsolicited light->dark change, through et and tmux.
 
 Enable with YOOHOO_ET_WINDOWS_TEST=1 and YOOHOO_ET_BIN=<dir with et, etserver,
-etterminal>. Run it on a test machine (nacelle), never on a live desktop.
+etterminal>. Run it on a test machine, never on a live desktop.
 """
 from __future__ import annotations
 

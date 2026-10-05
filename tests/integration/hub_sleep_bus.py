@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run under dbus-run-session on Plumbus; never suspends the real machine.
+"""Run under dbus-run-session on Testbed; never suspends the real machine.
 
 The private session bus stands in for the system bus in this child process.
 An owned login1 name emits actual D-Bus signals to the production Gio watcher.

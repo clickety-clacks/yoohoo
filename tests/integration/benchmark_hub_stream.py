@@ -1,10 +1,11 @@
-"""Isolated Plumbus-only quiet-stream performance reproduction.
+"""Isolated Testbed-only quiet-stream performance reproduction.
 
 Usage: python3 benchmark_hub_stream.py /path/to/agentd_hub.py [quiet_seconds]
 """
 import http.server
 import importlib.util
 import json
+import os
 from pathlib import Path
 import socket
 import sys
@@ -12,7 +13,7 @@ import tempfile
 import threading
 import time
 
-assert socket.gethostname() == "plumbus"
+assert os.environ.get("YOOHOO_TESTBED") == "1", "set YOOHOO_TESTBED=1 on a disposable test machine"
 quiet_seconds = float(sys.argv[2]) if len(sys.argv) > 2 else 2
 spec = importlib.util.spec_from_file_location("measured_hub", sys.argv[1])
 hub = importlib.util.module_from_spec(spec)

@@ -8,7 +8,7 @@ fall back to the ordinary window border and changes the application's size.
 
 ## Reproduction (September 14, 2026)
 
-On Plumbus, the installed daemon source (`3bb482b983bba6ba8b5b8d8794118f68c52cfd702ac8de566749b1f04c7e2064`)
+On Testbed, the installed daemon source (`3bb482b983bba6ba8b5b8d8794118f68c52cfd702ac8de566749b1f04c7e2064`)
 was loaded from an isolated staging directory. One owned Ghostty window ran
 `sleep 15`, with user terminal configuration disabled. No tmux was used.
 The fixture supplied both a native-window record and a synthetic Hub match
@@ -41,15 +41,15 @@ multiple Hub claims on one window, focus cleanup, and missing-tag repair.
 The existing query-failure test now explicitly supplies its assumed steady
 tag; missing-tag repair has its own regression.
 
-The corrected live Plumbus run retained **2370×1294 at (15,41)** across all
+The corrected live Testbed run retained **2370×1294 at (15,41)** across all
 four sampled phases, with the steady tag always present and the pulse tag
 observed both present and absent. The test terminal exited naturally and
 the desktop was empty afterward. No tests or artificial attention signals
-were run on osanwe.
+were run on lumen.
 
 ## Verification and installation
 
-The final source passed **99 tests on Plumbus** and independent Sol high
+The final source passed **99 tests on Testbed** and independent Sol high
 static review. The live geometry gate used daemon `58029a3a…`; the only
 subsequent daemon change deduplicates previous Hub addresses with `set()`.
 That final change is covered by the simultaneous-removal regression.
@@ -60,7 +60,7 @@ Final SHA-256 values:
 - Ownership tests: `8a47a90fc1e34f1ad632f7994b29e62e3782d576d732f64dca6576b9cdf8ebd6`
 - Attention tests: `dbe8e2af29eacf52f8d2464c78006e93b1d7d262761fe81ede60fcae93953a5e`
 
-Installed on osanwe at **10:54 PM PT, September 14, 2026**. Only
+Installed on lumen at **10:54 PM PT, September 14, 2026**. Only
 `window-attention.service` was restarted. Its native and notification
 listeners started successfully, and its Hub status became connected without
 an error. The installed daemon and tracked chezmoi source match the reviewed

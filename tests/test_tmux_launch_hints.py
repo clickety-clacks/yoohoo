@@ -31,7 +31,7 @@ from agent_window_resolver import (
 from agent_window_resolver.collector import split_tmux_command, transport_hint
 
 
-LOCAL = "osanwe"
+LOCAL = "lumen"
 
 
 def _identity(machine: str, pid: int, ticks: str) -> ProcessIdentity:
@@ -40,7 +40,7 @@ def _identity(machine: str, pid: int, ticks: str) -> ProcessIdentity:
 
 def _unreachable_target() -> TargetObservation:
     return TargetObservation(
-        "gibson", None, None, (), None, (), "unreachable",
+        "atlas", None, None, (), None, (), "unreachable",
         (ObservationError("remote_unreachable", "transport", "offline", True),),
     )
 
@@ -49,28 +49,28 @@ class TmuxLaunchHintTests(unittest.TestCase):
     def test_actual_mosh_client_new_session_display(self) -> None:
         argv = (
             "mosh-client",
-            "-# -- gibson tmux new-session -A -s pimcamp |",
-            "100.92.53.87",
+            "-# -- atlas tmux new-session -A -s pimcamp |",
+            "192.0.2.87",
             "60022",
         )
         self.assertEqual(
-            transport_hint(argv), ("mosh", "gibson", "pimcamp", None)
+            transport_hint(argv), ("mosh", "atlas", "pimcamp", None)
         )
 
     def test_ghostty_mosh_new_session_argv(self) -> None:
         argv = (
-            "/usr/bin/ghostty", "-e", "mosh", "--", "gibson", "tmux",
+            "/usr/bin/ghostty", "-e", "mosh", "--", "atlas", "tmux",
             "new-session", "-A", "-s", "pimcamp",
         )
         self.assertEqual(
-            transport_hint(argv), ("mosh", "gibson", "pimcamp", None)
+            transport_hint(argv), ("mosh", "atlas", "pimcamp", None)
         )
 
     def test_plain_ssh_quoted_remote_shell(self) -> None:
         remote = "exec tmux new-session -A -s pimcamp"
-        argv = ("ssh", "gibson", "sh -lc " + shlex.quote(remote))
+        argv = ("ssh", "atlas", "sh -lc " + shlex.quote(remote))
         self.assertEqual(
-            transport_hint(argv), ("ssh", "gibson", "pimcamp", None)
+            transport_hint(argv), ("ssh", "atlas", "pimcamp", None)
         )
 
     def test_spaced_mosh_display_session_recovery(self) -> None:
@@ -80,13 +80,13 @@ class TmuxLaunchHintTests(unittest.TestCase):
         ):
             argv = (
                 "mosh-client",
-                f"-# -- gibson tmux new-session -A -s {session} |",
-                "100.92.53.87",
+                f"-# -- atlas tmux new-session -A -s {session} |",
+                "192.0.2.87",
                 "60022",
             )
             with self.subTest(session=session):
                 self.assertEqual(
-                    transport_hint(argv), ("mosh", "gibson", session, None)
+                    transport_hint(argv), ("mosh", "atlas", session, None)
                 )
 
     def test_intact_punctuation_session_names_remain_literal(self) -> None:
@@ -101,19 +101,19 @@ class TmuxLaunchHintTests(unittest.TestCase):
             remote = f"exec tmux new-session -A -s {shlex.quote(session)}"
             with self.subTest(session=session, form="quoted-ssh"):
                 self.assertEqual(
-                    transport_hint(("ssh", "gibson", "sh -lc " + shlex.quote(remote))),
-                    ("ssh", "gibson", session, None),
+                    transport_hint(("ssh", "atlas", "sh -lc " + shlex.quote(remote))),
+                    ("ssh", "atlas", session, None),
                 )
 
     def test_flattened_mosh_shell_wrapper_uses_shared_parser(self) -> None:
         argv = (
             "mosh-client",
-            "-# -- gibson sh -lc exec tmux new-session -A -s pimcamp |",
-            "100.92.53.87",
+            "-# -- atlas sh -lc exec tmux new-session -A -s pimcamp |",
+            "192.0.2.87",
             "60022",
         )
         self.assertEqual(
-            transport_hint(argv), ("mosh", "gibson", "pimcamp", None)
+            transport_hint(argv), ("mosh", "atlas", "pimcamp", None)
         )
 
     def test_attach_forms_and_socket_selectors_remain_supported(self) -> None:
@@ -149,46 +149,46 @@ class TmuxLaunchHintTests(unittest.TestCase):
             with self.subTest(argv=argv):
                 self.assertIsNone(split_tmux_command(argv))
         self.assertIsNone(transport_hint((
-            "ghostty", "-e", "mosh", "--", "gibson", "tmux",
+            "ghostty", "-e", "mosh", "--", "atlas", "tmux",
             "new-session", "-A", "-s", "pimcamp", "echo", "ready",
         )))
         self.assertIsNone(transport_hint((
-            "ssh", "gibson", "sh", "-lc", "tmux", "attach", "-t", "pimcamp",
+            "ssh", "atlas", "sh", "-lc", "tmux", "attach", "-t", "pimcamp",
         )))
         self.assertIsNone(transport_hint((
             "mosh-client",
-            "-# -- gibson tmux new-session -A -s pimcamp -- echo ready |",
-            "100.92.53.87", "60022",
+            "-# -- atlas tmux new-session -A -s pimcamp -- echo ready |",
+            "192.0.2.87", "60022",
         )))
         for display in (
-            "-# -- gibson tmux new-session -A -s pimcamp; echo ready |",
-            "-# -- gibson tmux new-session -A -s pimcamp& echo ready |",
-            "-# -- gibson tmux new-session -A -s pimcamp | echo ready |",
-            "-# -- gibson tmux new-session -A -s pimcamp;true |",
-            "-# -- gibson tmux new-session -A -s pimcamp&true |",
-            "-# -- gibson tmux new-session -A -s pimcamp>file |",
+            "-# -- atlas tmux new-session -A -s pimcamp; echo ready |",
+            "-# -- atlas tmux new-session -A -s pimcamp& echo ready |",
+            "-# -- atlas tmux new-session -A -s pimcamp | echo ready |",
+            "-# -- atlas tmux new-session -A -s pimcamp;true |",
+            "-# -- atlas tmux new-session -A -s pimcamp&true |",
+            "-# -- atlas tmux new-session -A -s pimcamp>file |",
         ):
             with self.subTest(display=display):
                 self.assertIsNone(transport_hint((
-                    "mosh-client", display, "100.92.53.87", "60022",
+                    "mosh-client", display, "192.0.2.87", "60022",
                 )))
 
     def test_et_puts_the_remote_command_in_dash_c(self) -> None:
         remote = "exec tmux attach-session -t =pimcamp"
         for argv in (
-            ("et", "-c", "sh -lc " + shlex.quote(remote), "--", "gibson"),
+            ("et", "-c", "sh -lc " + shlex.quote(remote), "--", "atlas"),
             ("/usr/bin/ghostty", "-e", "et", "-p", "2022", "-c",
-             "tmux attach -t =pimcamp", "gibson"),
-            ("et", "gibson:2022", "--command=tmux new-session -A -s pimcamp"),
+             "tmux attach -t =pimcamp", "atlas"),
+            ("et", "atlas:2022", "--command=tmux new-session -A -s pimcamp"),
             ("et", "--serverfifo", "/tmp/etserver.fifo", "-c",
-             "tmux attach -t pimcamp", "mike@gibson"),
+             "tmux attach -t pimcamp", "mike@atlas"),
         ):
             with self.subTest(argv=argv):
                 hint = transport_hint(argv)
                 self.assertIsNotNone(hint)
                 kind, host, session, socket = hint
                 self.assertEqual((kind, session, socket), ("et", "pimcamp", None))
-                self.assertEqual(host.rsplit("@", 1)[-1], "gibson")
+                self.assertEqual(host.rsplit("@", 1)[-1], "atlas")
 
     def test_et_socket_selector_and_ipv6_host(self) -> None:
         self.assertEqual(
@@ -198,10 +198,10 @@ class TmuxLaunchHintTests(unittest.TestCase):
 
     def test_et_without_a_tmux_command_or_single_host_is_not_a_hint(self) -> None:
         for argv in (
-            ("et", "gibson"),
-            ("et", "-c", "vim notes", "gibson"),
-            ("et", "-c", "tmux attach -t a", "gibson", "extra"),
-            ("et", "--unknown-option", "-c", "tmux attach -t a", "gibson"),
+            ("et", "atlas"),
+            ("et", "-c", "vim notes", "atlas"),
+            ("et", "-c", "tmux attach -t a", "atlas", "extra"),
+            ("et", "--unknown-option", "-c", "tmux attach -t a", "atlas"),
             ("et", "-c"),
         ):
             with self.subTest(argv=argv):
@@ -215,19 +215,19 @@ class TmuxLaunchHintTests(unittest.TestCase):
         old = ProcessNode(
             _identity(LOCAL, 100, "20"), None,
             ("mosh-client",
-             "-# -- gibson tmux new-session -A -s pimcamp |",
-             "100.92.53.87", "60022"),
+             "-# -- atlas tmux new-session -A -s pimcamp |",
+             "192.0.2.87", "60022"),
         )
         new = ProcessNode(
             _identity(LOCAL, 101, "21"), None,
             ("mosh-client",
-             "-# -- gibson sh -lc exec tmux attach-session -t =pimcamp |",
-             "100.92.53.87", "60016"),
+             "-# -- atlas sh -lc exec tmux attach-session -t =pimcamp |",
+             "192.0.2.87", "60016"),
         )
         request = Request(
             "tmux-hint", "match", None,
             Target(
-                _identity("gibson", 42, "99"), "pimcamp-agent",
+                _identity("atlas", 42, "99"), "pimcamp-agent",
                 TmuxLocation("pimcamp", "0", "%1"),
             ),
             LOCAL, windows, None, Limits(),

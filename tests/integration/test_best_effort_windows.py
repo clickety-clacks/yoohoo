@@ -1,4 +1,4 @@
-"""Opt-in Plumbus desktop gate: two real windows, no exact transport proof.
+"""Opt-in Testbed desktop gate: two real windows, no exact transport proof.
 
 The windows have the same discoverable name but contain ordinary sleep
 processes. The synthetic remote roster deliberately cannot be verified through
@@ -21,11 +21,11 @@ from test_bundled_window import (
 
 
 @unittest.skipUnless(os.environ.get("YOOHOO_RESOLVER_WINDOW_TEST") == "1",
-                     "explicit Plumbus desktop opt-in required")
+                     "explicit Testbed desktop opt-in required")
 class BestEffortWindowsTests(unittest.TestCase):
     def test_two_named_windows_focus_existing_without_third_terminal(self):
-        if socket.gethostname() != "plumbus":
-            self.skipTest("Plumbus only")
+        if os.environ.get("YOOHOO_TESTBED") != "1":
+            self.skipTest("set YOOHOO_TESTBED=1 on a disposable test machine")
         daemon = load_daemon("yoohoo_best_effort_desktop")
         previous = hypr("activewindow")
         previous_pid = previous.get("pid")
@@ -57,7 +57,7 @@ class BestEffortWindowsTests(unittest.TestCase):
             daemon.focus_window(chosen["address"])
             self.assertTrue(wait_for(lambda:
                 hypr("activewindow").get("address") == chosen["address"]))
-            # This host identity is deliberately remote relative to Plumbus.
+            # This host identity is deliberately remote relative to Testbed.
             # No remote process proof is needed to use the matching titles.
             agent = {
                 "machine": "127.0.0.1", "instanceId": "owned-title-gate",
@@ -80,7 +80,7 @@ class BestEffortWindowsTests(unittest.TestCase):
             with tempfile.TemporaryDirectory(prefix="yoohoo-best-effort-state-") as state, \
                     patch.dict(os.environ, {"XDG_STATE_HOME": state}):
                 service = daemon.AttentionService()
-                service.hub = _SyntheticHub(agent, "plumbus")
+                service.hub = _SyntheticHub(agent, "testbed")
                 with patch.object(daemon.subprocess, "Popen", forbid_new_terminal):
                     self.assertTrue(service.open_target(agent_identity(agent)))
                 self.assertTrue(service.hub.acknowledged)

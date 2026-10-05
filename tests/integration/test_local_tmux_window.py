@@ -1,4 +1,4 @@
-"""Opt-in Plumbus gate for a real local tmux-backed Ghostty window.
+"""Opt-in Testbed gate for a real local tmux-backed Ghostty window.
 
 The fixture is deliberately narrow: one private tmux server, one attached
 Ghostty window, and one ``sleep`` pane published through a synthetic Hub.  The
@@ -36,12 +36,12 @@ from test_bundled_window import (
 
 @unittest.skipUnless(
     os.environ.get("YOOHOO_LOCAL_TMUX_WINDOW_TEST") == "1",
-    "set YOOHOO_LOCAL_TMUX_WINDOW_TEST=1 for the opt-in Plumbus test",
+    "set YOOHOO_LOCAL_TMUX_WINDOW_TEST=1 for the opt-in Testbed test",
 )
 class LocalTmuxWindowIntegrationTests(unittest.TestCase):
     def test_existing_local_tmux_window_is_focused_without_attach(self):
-        if socket.gethostname() != "plumbus":
-            self.skipTest("live desktop integration is restricted to Plumbus")
+        if os.environ.get("YOOHOO_TESTBED") != "1":
+            self.skipTest("live desktop integration needs YOOHOO_TESTBED=1 on a test machine")
         if (not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
                 or not os.environ.get("WAYLAND_DISPLAY")):
             self.skipTest("Hyprland/Wayland environment is unavailable")

@@ -20,7 +20,7 @@ target. et counts as available only when `etserver` is running, `etterminal` is
 on SSH's non-interactive PATH, and a TCP connection from this machine to
 etserver's port succeeds. mosh counts as available only when `mosh-server` is
 present and a nonce sent from here to a UDP port in mosh's range comes back.
-Both use the address SSH reached. From gibson to nacelle over the tailnet the
+Both use the address SSH reached. Between two machines on one private network the
 whole probe took 0.44 s (mosh UDP passing, no etserver running).
 
 et windows are recognised from the et client's argv, where the remote command
@@ -28,9 +28,9 @@ is in `-c`. That is a host/session hint, graded like mosh: the remote tmux
 client descends from `etterminal`, which reaches the shared `etserver` over a
 local socket, so no TCP endpoint pair links a window to its session.
 
-## Verified on nacelle, October 5, 2026
+## Verified on a test machine, October 5, 2026
 
-nacelle runs et 7.0.0 from `~/opt/et` (built, not installed system-wide).
+The test machine ran et 7.0.0 from a user directory (not installed system-wide).
 `tests/integration/test_et_windows.py` builds a private loopback sshd, a
 non-root etserver on a free port and a TMUX_TMPDIR-isolated tmux server in one
 temporary directory; a pty stands in for Ghostty and answers colour queries
@@ -50,7 +50,7 @@ temporary directory; a pty stands in for Ghostty and answers colour queries
 Run it with `YOOHOO_ET_WINDOWS_TEST=1 YOOHOO_ET_BIN=~/opt/et/usr/bin python3
 -B -m unittest tests/integration/test_et_windows.py` on a test machine.
 
-Measured separately on nacelle: et exits 0 on a normal tmux detach and when the
+Measured separately on the same machine: et exits 0 on a normal tmux detach and when the
 remote command fails, and exits 1 at once when etserver is unreachable, so a
 nonzero exit is a transport failure and safe to fall back on. tmux 3.7c only
 forwards a client's light/dark change to panes after the terminal also answers

@@ -24,12 +24,12 @@ for selecting an existing SSH/mosh window.
 
 ## Verification and limits
 
-Automated tests for this change run on Plumbus, not osanwe:
+Automated tests for this change run on Testbed, not lumen:
 
 Final source snapshot: 81 shared-core tests and 80 Yoohoo tests passed, plus
 the opt-in live two-window test. Luna implemented the initial changes; Sol
 performed independent file-only review, and the owner addressed its findings
-and ran the Plumbus checks.
+and ran the Testbed checks.
 
 - Shared regression fixtures exercise all three sanitized command forms from
   the reported `0_1_9` windows, including mosh-client's display argument, with
@@ -45,18 +45,18 @@ Remote `match` does not probe the target host. It reports
 tmux matching uses current client/session/window/pane data and client PID/start
 identity in the terminal subtree, without full target probing. Strict
 verification before a new attachment is unchanged. A real unnamed tmux-client
-regression failed before this correction and passed afterward on Plumbus.
+regression failed before this correction and passed afterward on Testbed.
 
 The original equal-title live test alone did not prove real mosh behavior.
 Follow-up tests now pass through production Yoohoo activation with two real
 mosh connections, generic titles, and unchanged window/client identities, and
 with a local Ghostty/tmux window whose argv contains no session name. Both
 verify workspace navigation and acknowledgement. See
-[the activation proof](plumbus-activation-proof.md) for scope, hashes, and
-cleanup evidence. The installed osanwe `0_1_9` popup click was not retested.
+[the activation proof](testbed-activation-proof.md) for scope, hashes, and
+cleanup evidence. The installed lumen `0_1_9` popup click was not retested.
 
 Mike subsequently authorized fixing the installed local `ask` failure. The
-corrected bundle was installed on osanwe at 6:30 PM PT on September 14, and only
+corrected bundle was installed on lumen at 6:30 PM PT on September 14, and only
 `window-attention.service` was restarted. No automated tests, test clicks, or
 tmux/session changes were performed there. Read-only inspection confirmed the
 installed hashes, connected tracker, and an existing `stalls` mosh-window match

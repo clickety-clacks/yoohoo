@@ -19,27 +19,27 @@ loader.exec_module(attention)
 class AttentionTests(unittest.TestCase):
     def test_remote_session_title(self):
         self.assertEqual(attention.remote_session_title([
-            "ghostty", "-e", "mosh", "--", "gibson", "tmux",
+            "ghostty", "-e", "mosh", "--", "atlas", "tmux",
             "new-session", "-A", "-s", "review guidance audit relief"
-        ]), "review guidance audit relief · gibson")
+        ]), "review guidance audit relief · atlas")
         self.assertEqual(attention.remote_session_title([
-            "ghostty", "-e", "ssh", "gibson", "tmux", "attach", "-t", "work"
-        ]), "work · gibson")
+            "ghostty", "-e", "ssh", "atlas", "tmux", "attach", "-t", "work"
+        ]), "work · atlas")
         for argv in ([], ["ghostty", "-e", "mosh"],
                      ["ghostty", "-e", "ssh", "-p", "22", "host"]):
             self.assertEqual(attention.remote_session_title(argv), "")
 
     def test_live_session_overrides_launch_and_preserves_original(self):
-        payload = {"windows": [{"address": "0x1", "title": "osanwe:mike"}]}
-        clients = [{"address": "0x1", "pid": 10, "title": "osanwe:mike"}]
+        payload = {"windows": [{"address": "0x1", "title": "lumen:mike"}]}
+        clients = [{"address": "0x1", "pid": 10, "title": "lumen:mike"}]
         from types import SimpleNamespace
         with patch.object(attention, "get_clients", return_value=clients), \
              patch.object(attention.subprocess, "run", return_value=SimpleNamespace(stdout="11\tyoohoo\n")), \
              patch.object(attention, "process_ancestors", return_value={11, 10}):
             result = attention.enriched_state(payload)
             self.assertEqual(result["windows"][0]["title"], "yoohoo")
-            self.assertEqual(result["windows"][0]["window_title"], "osanwe:mike")
-            self.assertEqual(payload["windows"][0]["title"], "osanwe:mike")
+            self.assertEqual(result["windows"][0]["window_title"], "lumen:mike")
+            self.assertEqual(payload["windows"][0]["title"], "lumen:mike")
             clients.append({"address": "0x2", "pid": 10})
             self.assertEqual(attention.enriched_state(payload), payload)
 

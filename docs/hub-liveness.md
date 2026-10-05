@@ -2,7 +2,7 @@
 
 ## Incident and requirements
 
-On September 15, 2026, Osanwe's last accepted Hub snapshot arrived at
+On September 15, 2026, Lumen's last accepted Hub snapshot arrived at
 11:15:14 AM PT, immediately before system suspend. The laptop resumed at
 1:26 PM PT, but Yoohoo's existing SSE socket never received more bytes.
 A separate, bounded subscription received seven snapshots in four seconds.
@@ -28,10 +28,10 @@ The remediation must:
 
 ## Verification and delivery
 
-Automated and fault-injection tests are required to run on Plumbus. Osanwe is limited to
+Automated and fault-injection tests are required to run on Testbed. Lumen is limited to
 source work, read-only diagnostics, and the authorized complete installation.
 No physical suspend, user terminal manipulation, or synthetic attention is
-needed on Osanwe.
+needed on Lumen.
 
 Acceptance covers a quiet healthy stream, a silent blackhole, EOF and invalid
 frames, suspend/resume during reading and retry, cached roster preservation,
@@ -46,7 +46,7 @@ and any untested scope before completion.
 
 ## Validation record
 
-- Hub: 31 Rust tests passed on Plumbus, including a delayed first-body-poll
+- Hub: 31 Rust tests passed on Testbed, including a delayed first-body-poll
   regression; formatting and Clippy with warnings denied passed.
 - Cross-product: the release-built Hub and actual Python subscriber passed a
   quiet-stream check using the real 15-second heartbeat. The complete roster,
@@ -56,7 +56,7 @@ and any untested scope before completion.
 - This gate initially caught the 10-second connection timeout leaking into
   stream reads. The stream now uses the separate liveness watchdog, not the
   handshake timeout.
-- Final selected Yoohoo regression suite: 132 tests passed on Plumbus,
+- Final selected Yoohoo regression suite: 132 tests passed on Testbed,
   including nine liveness tests and six lifecycle tests. The existing worker
   test's fake now filters acknowledged entries like production and waits for
   the locked cache update; no production worker change was needed.
@@ -64,34 +64,34 @@ and any untested scope before completion.
   production Gio listener and produced suspended/reconnecting states; stopping
   the listener terminated it and made later signals inert. No physical suspend
   or system-bus mutation was performed.
-- UI policy passed on Plumbus. A Quickshell component smoke check also passed
+- UI policy passed on Testbed. A Quickshell component smoke check also passed
   there using the installed Omarchy QML components and isolated configuration
   and state directories; no popup was opened, and client inventory stayed empty.
 - Test-boundary exception: the UI coding subagent ran the isolated
-  `tests.test_selection` unittest on Osanwe despite explicit instructions.
-  This was disclosed to Mike and rerun on Plumbus. It did not mutate services,
-  the desktop, or terminals. Remaining runtime gates stay on Plumbus.
+  `tests.test_selection` unittest on Lumen despite explicit instructions.
+  This was disclosed to Mike and rerun on Testbed. It did not mutate services,
+  the desktop, or terminals. Remaining runtime gates stay on Testbed.
 
 Independent Sol high review found no remaining blockers after lifecycle,
 generation, callback-locking, and malformed-state corrections. The final
 Quickshell component smoke passed again after the timestamp validation changes.
 The final real Hub/subscriber quiet-stream test also passed (16.123 seconds).
 
-These gates do not claim a physical laptop sleep/resume test on Osanwe.
+These gates do not claim a physical laptop sleep/resume test on Lumen.
 ## Installed delivery
 
 Installed September 15, 2026, at approximately 9:06 PM PT:
 
-- Gibson Hub: complete standalone binary package, an unreleased local build
+- Atlas Hub: complete standalone binary package, an unreleased local build
   based on v0.1.1 / `8981a292b921d580d5793c5faae8568b5fceeb8a`.
   Installed binary SHA256:
   `ea86b3672827612e267b187b5be1e3da6195f7fd7376f7e42d1c6249e82be9f6`.
   Source, archive/checksums, and previous binary are retained at
-  `/home/mike/.local/state/agentd-hub-heartbeat.ZdmQwv` on Gibson.
+  `~/.local/state/agentd-hub-heartbeat.ZdmQwv` on Atlas.
   Only the Hub service was restarted; Agentd and its hooks were untouched.
-- Osanwe Yoohoo: `python -B install.py install`, the complete normal installer,
+- Lumen Yoohoo: `python -B install.py install`, the complete normal installer,
   including service activation, Hyprland validation, and shell restart.
-  Backup: `/home/mike/.local/state/yoohoo/backups/1789531574915587105`.
+  Backup: `~/.local/state/yoohoo/backups/1789531574915587105`.
   All 24 nonpersonal distribution files match source and installer manifest.
   Personal Yoohoo config and shell settings retain their preinstall hashes.
   The bundled resolver is unchanged.
@@ -100,10 +100,10 @@ Installed September 15, 2026, at approximately 9:06 PM PT:
   A bounded 18-second production SSE observation received snapshots and the
   new `agentd.hub.heartbeat.v1` event. Its curl timeout was intentional, to end
   observation of an otherwise unending stream.
-- No Osanwe sleep test, synthetic attention, terminal manipulation, or tmux
-  restart was performed. Plumbus component smoke left desktop clients empty.
+- No Lumen sleep test, synthetic attention, terminal manipulation, or tmux
+  restart was performed. Testbed component smoke left desktop clients empty.
 
-The next physical sleep/wake on Osanwe remains a real-world observation, not
+The next physical sleep/wake on Lumen remains a real-world observation, not
 something these deployment checks claim to have exercised.
 
 ## September 16: false-stale indicator investigation
@@ -121,8 +121,8 @@ and the 45-second expiry must remain rejected. The regression must exercise
 the actual extracted QML handler with a response arriving after the timer
 tick, not only the standalone health helper.
 
-Runtime verification is pending: Plumbus SSH timed out during this
-investigation. No Osanwe tests, installed changes, or restarts are authorized
+Runtime verification is pending: Testbed SSH timed out during this
+investigation. No Lumen tests, installed changes, or restarts are authorized
 by this handoff or performed for it.
 
 Source fix prepared in `payload/Panel.qml`: sample `root.nowMs = Date.now()`
@@ -133,7 +133,7 @@ checks genuine future and expired timestamps remain unavailable. These are
 authored regression cases, not yet passing runtime evidence. Existing handler
 fixtures also use a fixed local clock. Selection.js and the daemon are unchanged.
 
-Plumbus became available later on September 16. The frozen source
+Testbed became available later on September 16. The frozen source
 (`Panel.qml` SHA256 `6ffd571055eeb6c1d6bbe47e6ff105356d58169f5bec4eeaebe85169ad69aed5`,
 `test_selection.py` SHA256 `5eca249d70c07bea47b6df5c72451ea0fbc42174788633c8370e9f3dabe27bd1`)
 passed the complete selection-policy test, including the actual extracted QML
@@ -141,15 +141,15 @@ handler's delayed-receipt, future-date, and expiry assertions. Independent
 Sol high static review accepted this pair. A separate baseline copy using the
 old Panel with the new regression failed at the receipt-clock assertion
 (`100000 != 101000`), as expected. Staging:
-`/tmp/yoohoo-clock-check.FiSZI6` on Plumbus. No desktop test or deployment was
-performed; installed Osanwe files remain unchanged pending authorization.
+`/tmp/yoohoo-clock-check.FiSZI6` on Testbed. No desktop test or deployment was
+performed; installed Lumen files remain unchanged pending authorization.
 
-Mike subsequently authorized installation on Osanwe. On September 16 at
+Mike subsequently authorized installation on Lumen. On September 16 at
 8:19 AM PT, the complete `python -B install.py install` workflow succeeded.
 Only Panel.qml required a content update; all 24 nonpersonal package files
 match source and the installer record. Backup:
-`/home/mike/.local/state/yoohoo/backups/1789571950939411975`.
+`~/.local/state/yoohoo/backups/1789571950939411975`.
 Personal config and shell settings hashes are unchanged. Service is active,
 Hyprland config errors empty, shell ping succeeds, and read-only running-panel
 IPC reports derived `hubHealth=live` with an empty error and fresh timestamps.
-No terminals or tmux sessions were restarted and no Osanwe tests were run.
+No terminals or tmux sessions were restarted and no Lumen tests were run.

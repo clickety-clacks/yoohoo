@@ -19,10 +19,10 @@ from test_bundled_window import _SyntheticHub, agent_identity, load_daemon
 
 
 @unittest.skipUnless(os.environ.get("YOOHOO_MOSH_WINDOWS_TEST") == "1",
-                     "explicit real-mosh Plumbus opt-in required")
+                     "explicit real-mosh Testbed opt-in required")
 class MoshWindowsTests(unittest.TestCase):
     def test_actual_mosh_connections_focus_existing_window_and_workspace(self):
-        self.assertEqual(socket.gethostname(), "plumbus", "Plumbus only")
+        self.assertEqual(os.environ.get("YOOHOO_TESTBED"), "1", "test machine only")
         fixture_path = Path(os.environ["YOOHOO_MOSH_FIXTURE"]).resolve(strict=True)
         self.assertEqual(hashlib.sha256(fixture_path.read_bytes()).hexdigest(),
                          "12bd8e2a5c1f8bbea2545baed34a3f38304257d7c02d596a464cd436cb572e21",
@@ -59,7 +59,7 @@ class MoshWindowsTests(unittest.TestCase):
             with tempfile.TemporaryDirectory(prefix="yoohoo-mosh-state-") as state, \
                     patch.dict(os.environ, {"XDG_STATE_HOME": state}):
                 service = daemon.AttentionService()
-                service.hub = _SyntheticHub(agent, "plumbus")
+                service.hub = _SyntheticHub(agent, "testbed")
                 with patch.object(daemon, "resolve_agent_window", capture_resolve), \
                         patch.object(daemon.subprocess, "Popen", no_connection_launch):
                     result = service.open_target(agent_identity(agent))

@@ -33,7 +33,7 @@ def load_daemon(name):
 
 def agent(
     *,
-    machine="osanwe",
+    machine="lumen",
     instance="instance-a",
     pid=42,
     ticks=99,
@@ -49,7 +49,7 @@ def agent(
         "harness": "codex",
         "detectedBy": "proc_comm",
         "presence": {"state": "present", "cause": None},
-        "cwd": {"state": "known", "value": "/home/mike", "cause": None},
+        "cwd": {"state": "known", "value": "~", "cause": None},
         "activity": {"state": state, "source": "hook", "observedAtUnixMs": observed},
         "tty": "pts/8",
         "tmux": {"session": session, "windowIndex": 1, "windowName": "mike", "paneId": pane},
@@ -58,7 +58,7 @@ def agent(
     }
 
 
-def snapshot(*agents, revision=1, source_machine="osanwe", source_health="reporting"):
+def snapshot(*agents, revision=1, source_machine="lumen", source_health="reporting"):
     return {
         "type": "snapshot",
         "schema": "agentd-hub.snapshot.v1",
@@ -78,14 +78,14 @@ def snapshot(*agents, revision=1, source_machine="osanwe", source_health="report
 
 class HubTests(unittest.TestCase):
     def test_machine_matching_allows_short_fqdn_but_not_unrelated_domains(self):
-        self.assertTrue(hub.machine_matches("gibson", "gibson.tailnet.ts.net"))
-        self.assertTrue(hub.machine_matches("gibson.tailnet.ts.net", "gibson"))
-        self.assertFalse(hub.machine_matches("gibson.one.example", "gibson.two.example"))
+        self.assertTrue(hub.machine_matches("atlas", "atlas.example.net"))
+        self.assertTrue(hub.machine_matches("atlas.example.net", "atlas"))
+        self.assertFalse(hub.machine_matches("atlas.one.example", "atlas.two.example"))
 
     def test_contract_schema_and_identity_include_machine_instance_and_exact_process(self):
         value = snapshot(agent())
         self.assertEqual(hub.validate_snapshot(value), value)
-        self.assertEqual(hub.agent_identity(value["agents"][0]), "osanwe|instance-a|42|99")
+        self.assertEqual(hub.agent_identity(value["agents"][0]), "lumen|instance-a|42|99")
         with self.assertRaises(ValueError):
             hub.validate_snapshot({"type": "snapshot", "schema": "agentd.snapshot.v0"})
 
@@ -246,13 +246,13 @@ class HubTests(unittest.TestCase):
 
     def test_tmux_pane_and_client_bridge_matches_exact_local_agent(self):
         a = agent(state="needs_attention")
-        clients = [{"address": "0x1", "pid": 700, "title": "osanwe:mike",
+        clients = [{"address": "0x1", "pid": 700, "title": "lumen:mike",
                     "workspace": {"id": 1, "name": "1"}}]
         panes = [{"session": "ask", "windowIndex": "1", "paneId": "%21", "panePid": 600}]
         tmux_clients = [{"session": "ask", "clientPid": 500, "clientTty": "/dev/pts/8"}]
         ancestry = {42: {42, 600}, 500: {500, 700}}
         with patch.object(hub, "_process_start_ticks", return_value=99):
-            matches = hub.match_agent_windows([a], clients, "osanwe",
+            matches = hub.match_agent_windows([a], clients, "lumen",
                                               lambda pid: ancestry.get(pid, set()), lambda _pid: [],
                                               panes, tmux_clients)
         self.assertEqual(matches[hub.agent_identity(a)]["address"], "0x1")
@@ -280,29 +280,29 @@ class HubTests(unittest.TestCase):
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def test_ambiguous_remote_match_is_not_marked_open(self):
-        a = agent(machine="gibson", state="needs_attention")
+        a = agent(machine="atlas", state="needs_attention")
         clients = [
             {"address": "0x1", "pid": 700},
             {"address": "0x2", "pid": 701},
         ]
-        argv = ["ghostty", "-e", "mosh", "--", "gibson", "tmux", "attach", "-t", "ask"]
-        self.assertEqual(hub.parse_remote_launch(argv), {"transport": "mosh", "host": "gibson", "session": "ask"})
-        self.assertEqual(hub.match_agent_windows([a], clients, "osanwe",
+        argv = ["ghostty", "-e", "mosh", "--", "atlas", "tmux", "attach", "-t", "ask"]
+        self.assertEqual(hub.parse_remote_launch(argv), {"transport": "mosh", "host": "atlas", "session": "ask"})
+        self.assertEqual(hub.match_agent_windows([a], clients, "lumen",
                                                   lambda _pid: set(), lambda _pid: argv), {})
 
     def test_remote_launch_round_trip_is_matchable(self):
-        a = agent(machine="gibson", state="needs_attention", session="ask room")
+        a = agent(machine="atlas", state="needs_attention", session="ask room")
         plan = {"available": True, "transport": "ssh", "terminal": "/bin/ghostty"}
-        launch = hub.build_launch_argv(a, plan, "osanwe")
-        self.assertEqual(launch[:6], ["/bin/ghostty", "-e", "ssh", "-tt", "--", "gibson"])
+        launch = hub.build_launch_argv(a, plan, "lumen")
+        self.assertEqual(launch[:6], ["/bin/ghostty", "-e", "ssh", "-tt", "--", "atlas"])
         self.assertIn("sh -lc", launch[-1])
         self.assertIn("=ask room", launch[-1])
         self.assertEqual(hub.parse_remote_launch(launch), {
-            "transport": "ssh", "host": "gibson", "session": "ask room"
+            "transport": "ssh", "host": "atlas", "session": "ask room"
         })
 
     def test_mosh_preflight_uses_pty_free_ssh_probe(self):
-        a = agent(machine="gibson", state="needs_attention", session="ask room")
+        a = agent(machine="atlas", state="needs_attention", session="ask room")
         calls = []
 
         def runner(argv, **kwargs):
@@ -311,7 +311,7 @@ class HubTests(unittest.TestCase):
 
         plan = {"available": True, "transport": "mosh", "terminal": "/bin/ghostty"}
         verified = hub.verify_connection(
-            a, plan, "osanwe", runner=runner,
+            a, plan, "lumen", runner=runner,
             which=lambda name: "/bin/" + name,
         )
         self.assertEqual(verified["transport"], "mosh")
@@ -321,7 +321,7 @@ class HubTests(unittest.TestCase):
 
     def test_remote_tmux_selector_verifies_exact_pane(self):
         daemon = load_daemon("window_attention_remote_selector_test")
-        remote = agent(machine="gibson", session="ask room", state="needs_attention")
+        remote = agent(machine="atlas", session="ask room", state="needs_attention")
         remote["tmux"]["windowIndex"] = "3"
         remote["tmux"]["paneId"] = "%21"
         calls = []
@@ -346,30 +346,30 @@ class HubTests(unittest.TestCase):
         tmux_clients = [{"session": "ask", "clientPid": 500}]
         with patch.object(daemon, "process_ancestors", side_effect=lambda pid: {pid, 700} if pid == 500 else {pid}):
             self.assertTrue(daemon.hub_agent_is_visible(
-                waiting, client, panes, tmux_clients, "osanwe",
+                waiting, client, panes, tmux_clients, "lumen",
             ))
         panes[0]["paneActive"] = False
         self.assertFalse(daemon.hub_agent_is_visible(
-            waiting, client, panes, tmux_clients, "osanwe",
+            waiting, client, panes, tmux_clients, "lumen",
         ))
 
     def test_connection_prefers_mosh_and_launch_uses_exact_target_and_shell_quoting(self):
-        a = agent(machine="gibson", state="needs_attention", session="ask room")
-        plan = hub.connection_plan("gibson", "ask room", "osanwe", [],
+        a = agent(machine="atlas", state="needs_attention", session="ask room")
+        plan = hub.connection_plan("atlas", "ask room", "lumen", [],
                                    which=lambda name: "/bin/" + name)
         self.assertEqual((plan["transport"], plan["fallback"]), ("mosh", "ssh"))
-        argv = hub.build_launch_argv(a, plan, "osanwe")
+        argv = hub.build_launch_argv(a, plan, "lumen")
         # mosh starts inside the shared fallback launcher; the host and the
         # remote command travel as positional arguments, never as script text.
         self.assertEqual(argv[:4], ["/bin/ghostty", "-e", "sh", "-lc"])
         self.assertEqual(argv[4], hub.TRANSPORT_LAUNCH_SCRIPT)
-        self.assertEqual(argv[5:7], ["transport-launch", "gibson"])
+        self.assertEqual(argv[5:7], ["transport-launch", "atlas"])
         self.assertEqual(argv[-1], "mosh")
         self.assertIn("=ask room", argv[7])
         self.assertNotIn(";", argv[7])
         bad = copy.deepcopy(a)
-        bad["machine"] = "gibson;touch /tmp/pwned"
-        self.assertIsNone(hub.build_launch_argv(bad, plan, "osanwe"))
+        bad["machine"] = "atlas;touch /tmp/pwned"
+        self.assertIsNone(hub.build_launch_argv(bad, plan, "lumen"))
 
     def test_local_sse_fixture_delivers_initial_and_followup_frames(self):
         first = snapshot(agent(state="idle"), revision=1)
@@ -450,12 +450,12 @@ class HubTests(unittest.TestCase):
 
     def test_remote_click_does_not_ack_when_pre_attach_verification_fails(self):
         daemon = load_daemon("window_attention_hub_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
 
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def fetch_snapshot(self): return True
             def snapshot(self): return snapshot(waiting)
             def pending_agents(self): return [waiting]
@@ -486,12 +486,12 @@ class HubTests(unittest.TestCase):
 
     def test_unresolved_resolver_reason_is_retained_for_action_feedback(self):
         daemon = load_daemon("window_attention_action_reason_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
 
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
 
             def fetch_snapshot(self): return True
             def snapshot(self): return snapshot(waiting)
@@ -561,14 +561,14 @@ class HubTests(unittest.TestCase):
 
     def test_unreadable_compositor_inventory_cannot_start_attach(self):
         daemon = load_daemon("window_attention_inventory_failure_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
 
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def fetch_snapshot(self): return True
-            def snapshot(self): return snapshot(waiting, source_machine="gibson")
+            def snapshot(self): return snapshot(waiting, source_machine="atlas")
             def pending_agents(self): return [waiting]
             def acknowledge(self, *_args): self.acknowledged = True
             def has_launch_intent(self, *_args): return False
@@ -594,14 +594,14 @@ class HubTests(unittest.TestCase):
 
     def test_inventory_failure_after_target_verification_cannot_start_attach(self):
         daemon = load_daemon("window_attention_inventory_recheck_failure_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
 
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def fetch_snapshot(self): return True
-            def snapshot(self): return snapshot(waiting, source_machine="gibson")
+            def snapshot(self): return snapshot(waiting, source_machine="atlas")
             def pending_agents(self): return [waiting]
             def acknowledge(self, *_args): self.acknowledged = True
             def has_launch_intent(self, *_args): return False
@@ -634,7 +634,7 @@ class HubTests(unittest.TestCase):
         active_patch = patch.object(daemon, "active_address", return_value="0xabc")
         active_patch.start()
         self.addCleanup(active_patch.stop)
-        waiting = agent(machine="gibson", state="needs_attention", observed=1000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=1000)
         newer = copy.deepcopy(waiting)
         newer["activity"] = {"state": "needs_attention", "observedAtUnixMs": 2000}
         proof = {
@@ -644,7 +644,7 @@ class HubTests(unittest.TestCase):
             },
             "target": {
                 "identity": {
-                    "machine": "gibson", "instanceId": "instance-a",
+                    "machine": "atlas", "instanceId": "instance-a",
                     "pid": 42, "startTimeTicks": "99",
                 },
                 "location": {"kind": "tmux", "tmux": {
@@ -661,7 +661,7 @@ class HubTests(unittest.TestCase):
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
 
             def __init__(self):
                 self.current = waiting
@@ -676,7 +676,7 @@ class HubTests(unittest.TestCase):
                 return True
 
             def snapshot(self):
-                return snapshot(self.current, source_machine="gibson")
+                return snapshot(self.current, source_machine="atlas")
 
             def pending_agents(self):
                 return [self.current]
@@ -714,14 +714,14 @@ class HubTests(unittest.TestCase):
 
     def test_source_disconnect_rejects_click_before_ack(self):
         daemon = load_daemon("window_attention_disconnect_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
 
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def fetch_snapshot(self): return True
-            def snapshot(self): return snapshot(waiting, source_machine="gibson", source_health="not_reached")
+            def snapshot(self): return snapshot(waiting, source_machine="atlas", source_health="not_reached")
             def pending_agents(self): return [waiting]
             def acknowledge(self, *_args): self.acknowledged = True
 
@@ -733,13 +733,13 @@ class HubTests(unittest.TestCase):
 
     def test_cli_projection_keeps_disconnected_rows_visible_but_not_clickable(self):
         daemon = load_daemon("window_attention_projection_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
-        source_snapshot = snapshot(waiting, source_machine="gibson", source_health="reporting")
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
+        source_snapshot = snapshot(waiting, source_machine="atlas", source_health="reporting")
 
         class FakeHub:
             enabled = True
             connected = False
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def snapshot(self): return source_snapshot
             def pending_agents(self): return [waiting]
 
@@ -751,19 +751,19 @@ class HubTests(unittest.TestCase):
             service.hub = FakeHub()
             rows = service.hub_rows({"0x1"})
             self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["machine"], "gibson")
+            self.assertEqual(rows[0]["machine"], "atlas")
             self.assertFalse(rows[0]["connection_available"])
             self.assertEqual(rows[0]["address"], "")
             self.assertEqual(rows[0]["unavailable_reason"], "hub_disconnected")
 
     def test_matched_window_stays_activatable_without_launch_tools(self):
         daemon = load_daemon("window_attention_match_projection_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
-        source_snapshot = snapshot(waiting, source_machine="gibson", source_health="reporting")
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
+        source_snapshot = snapshot(waiting, source_machine="atlas", source_health="reporting")
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def snapshot(self): return source_snapshot
             def pending_agents(self): return [waiting]
 
@@ -783,7 +783,7 @@ class HubTests(unittest.TestCase):
                 },
                 "target": {
                     "identity": {
-                        "machine": "gibson", "instanceId": "instance-a",
+                        "machine": "atlas", "instanceId": "instance-a",
                         "pid": 42, "startTimeTicks": "99",
                     },
                     "location": {"kind": "tmux", "tmux": {
@@ -820,7 +820,7 @@ class HubTests(unittest.TestCase):
         return row
 
     @staticmethod
-    def _hub_menu_row(identity="gibson|instance-a|42|99", address="0x1", **overrides):
+    def _hub_menu_row(identity="atlas|instance-a|42|99", address="0x1", **overrides):
         row = {
             "kind": "agent",
             "id": identity,
@@ -835,7 +835,7 @@ class HubTests(unittest.TestCase):
             "last_attention_at": 30.0,
             "count": 1,
             "source": "agentd-hub",
-            "machine": "gibson",
+            "machine": "atlas",
             "open_on_machine": True,
             "connection_available": True,
             "activity": "needs_attention",
@@ -906,13 +906,13 @@ class HubTests(unittest.TestCase):
         rows = daemon.merge_attention_rows(
             [self._native_menu_row("0x1")],
             [
-                self._hub_menu_row("gibson|instance-a|42|99", "0x1"),
-                self._hub_menu_row("gibson|instance-a|43|100", "0x1"),
+                self._hub_menu_row("atlas|instance-a|42|99", "0x1"),
+                self._hub_menu_row("atlas|instance-a|43|100", "0x1"),
             ],
         )
         self.assertEqual(len(rows), 2)
         self.assertEqual([row["id"] for row in rows], [
-            "gibson|instance-a|42|99", "gibson|instance-a|43|100",
+            "atlas|instance-a|42|99", "atlas|instance-a|43|100",
         ])
         self.assertTrue(all(row["kind"] == "agent" for row in rows))
 
@@ -955,7 +955,7 @@ class HubTests(unittest.TestCase):
         source_snapshot = snapshot(waiting, source_machine=waiting["machine"], source_health="reporting")
         class FakeHub:
             enabled = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             def __init__(self, connected): self.connected = connected
             def snapshot(self): return source_snapshot
             def pending_agents(self): return [waiting]
@@ -965,7 +965,7 @@ class HubTests(unittest.TestCase):
 
     def test_projection_hides_agent_without_window_or_tmux_session(self):
         daemon = load_daemon("window_attention_projection_sessionless_test")
-        waiting = agent(machine="osanwe", state="needs_attention", observed=2000)
+        waiting = agent(machine="lumen", state="needs_attention", observed=2000)
         waiting["tmux"] = None
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(daemon, "state_dir", return_value=Path(directory)), \
@@ -979,7 +979,7 @@ class HubTests(unittest.TestCase):
 
     def test_projection_keeps_agent_with_tmux_session_but_no_window(self):
         daemon = load_daemon("window_attention_projection_session_only_test")
-        waiting = agent(machine="gibson", state="needs_attention", observed=2000)
+        waiting = agent(machine="atlas", state="needs_attention", observed=2000)
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(daemon, "state_dir", return_value=Path(directory)), \
              patch.object(daemon, "get_clients", return_value=[]), \
@@ -992,7 +992,7 @@ class HubTests(unittest.TestCase):
 
     def test_projection_keeps_sessionless_agent_with_matched_window(self):
         daemon = load_daemon("window_attention_projection_sessionless_match_test")
-        waiting = agent(machine="osanwe", state="needs_attention", observed=2000)
+        waiting = agent(machine="lumen", state="needs_attention", observed=2000)
         waiting["tmux"] = None
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(daemon, "state_dir", return_value=Path(directory)), \
@@ -1008,7 +1008,7 @@ class HubTests(unittest.TestCase):
                 },
                 "target": {
                     "identity": {
-                        "machine": "osanwe", "instanceId": "instance-a",
+                        "machine": "lumen", "instanceId": "instance-a",
                         "pid": 42, "startTimeTicks": "99",
                     },
                     "location": {"kind": "local"},
@@ -1024,9 +1024,9 @@ class HubTests(unittest.TestCase):
 
     def test_hub_alert_sound_is_silent_for_unpresentable_claim(self):
         daemon = load_daemon("window_attention_alert_sound_test")
-        silent = agent(machine="osanwe", state="needs_attention", observed=2000)
+        silent = agent(machine="lumen", state="needs_attention", observed=2000)
         silent["tmux"] = None
-        audible = agent(machine="gibson", instance="instance-b", pid=43, state="needs_attention", observed=2000)
+        audible = agent(machine="atlas", instance="instance-b", pid=43, state="needs_attention", observed=2000)
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(daemon, "state_dir", return_value=Path(directory)):
             service = daemon.AttentionService()
@@ -1043,13 +1043,13 @@ class HubTests(unittest.TestCase):
 
     def test_dismiss_acknowledges_pending_hub_claim_without_opening(self):
         daemon = load_daemon("window_attention_dismiss_hub_test")
-        waiting = agent(machine="osanwe", state="idle", observed=2000)
+        waiting = agent(machine="lumen", state="idle", observed=2000)
         waiting["tmux"] = None
         identity = hub.agent_identity(waiting)
         class FakeHub:
             enabled = True
             connected = True
-            config = {"machine": "osanwe"}
+            config = {"machine": "lumen"}
             acknowledged = None
             cleared = None
             def pending_agents(self): return [waiting]
@@ -1071,7 +1071,7 @@ class HubTests(unittest.TestCase):
             launch.assert_not_called()
             # An identity that is no longer pending is already dismissed.
             service.hub.acknowledged = None
-            self.assertTrue(service.dismiss("osanwe|gone|1|2"))
+            self.assertTrue(service.dismiss("lumen|gone|1|2"))
             self.assertIsNone(service.hub.acknowledged)
             self.assertFalse(service.dismiss(""))
 
@@ -1090,7 +1090,7 @@ class HubTests(unittest.TestCase):
         daemon = load_daemon("window_attention_dismiss_cli_test")
         with patch.object(daemon.AttentionService, "dismiss", return_value=False), \
              patch.object(daemon.AttentionService, "__init__", return_value=None), \
-             patch.object(daemon.sys, "argv", ["window-attention", "dismiss", "osanwe|x|1|2"]), \
+             patch.object(daemon.sys, "argv", ["window-attention", "dismiss", "lumen|x|1|2"]), \
              patch("builtins.print") as output:
             self.assertEqual(daemon.main(), 1)
         payload = json.loads(output.call_args.args[0])

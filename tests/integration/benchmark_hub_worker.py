@@ -1,4 +1,4 @@
-"""Plumbus-only background-worker benchmark with real owned /proc targets.
+"""Testbed-only background-worker benchmark with real owned /proc targets.
 
 Usage: python3 benchmark_hub_worker.py /path/to/payload/window-attention
 
@@ -17,7 +17,7 @@ import tempfile
 import time
 from unittest.mock import patch
 
-assert socket.gethostname() == "plumbus"
+assert os.environ.get("YOOHOO_TESTBED") == "1", "set YOOHOO_TESTBED=1 on a disposable test machine"
 loader = importlib.machinery.SourceFileLoader("perf_daemon", sys.argv[1])
 spec = importlib.util.spec_from_loader(loader.name, loader)
 daemon = importlib.util.module_from_spec(spec)
@@ -39,7 +39,7 @@ def inventory():
 class Hub:
     enabled = True
     connected = True
-    config = {"machine": "plumbus"}
+    config = {"machine": "testbed"}
     revision = 0
 
     def __init__(self, agents):

@@ -26,16 +26,16 @@ a.equal(s.canActivate({kind:'agent', id:'agent-a', address:''}, true, false), fa
 a.equal(s.canActivate({kind:'agent', id:'agent-a', address:'', connection_available:false}, true, true), false);
 a.equal(s.canActivate({kind:'window', id:'native-id', address:''}, false, true), false);
 a.equal(s.canActivate({kind:'window', id:'native-id', address:'0xlocal'}, false, true), true);
-a.equal(s.actionFailure({kind:'agent', machine:'gibson', open_on_machine:false}), 'Could not connect to gibson');
-a.equal(s.actionFailure({kind:'agent', machine:'gibson', open_on_machine:true}), 'Could not focus agent on gibson');
+a.equal(s.actionFailure({kind:'agent', machine:'atlas', open_on_machine:false}), 'Could not connect to atlas');
+a.equal(s.actionFailure({kind:'agent', machine:'atlas', open_on_machine:true}), 'Could not focus agent on atlas');
 a.equal(s.actionFailure({kind:'window', address:'0xlocal'}), 'Could not open window');
 a.equal(s.agentCount([{kind:'agent'}, {address:'0xlocal'}]), 1);
 a.match(s.plainReason('agent_has_no_tmux_session', {}), /not running in a tmux session/);
-a.match(s.plainReason('source_not_reached', {machine:'gibson'}), /Agentd on gibson is not reporting/);
+a.match(s.plainReason('source_not_reached', {machine:'atlas'}), /Agentd on atlas is not reporting/);
 a.equal(s.plainReason('made_up_code', {}), '');
-a.equal(s.failureReason({kind:'agent', machine:'osanwe', open_on_machine:false, unavailable_reason:'agent_has_no_tmux_session'}, ''),
+a.equal(s.failureReason({kind:'agent', machine:'lumen', open_on_machine:false, unavailable_reason:'agent_has_no_tmux_session'}, ''),
   'This agent is not running in a tmux session, and Yoohoo could not find a window for it.');
-a.equal(s.failureReason({kind:'agent', machine:'gibson', open_on_machine:false}, ''), 'Could not connect to gibson.');
+a.equal(s.failureReason({kind:'agent', machine:'atlas', open_on_machine:false}, ''), 'Could not connect to atlas.');
 a.equal(s.failureReason({kind:'window'}, JSON.stringify({reason:{code:'candidate_count', message:'x'}})),
   'Yoohoo could not single out one window for this agent and will not guess.');
 a.equal(s.failureReason({kind:'window'}, JSON.stringify({reason:{code:'odd', message:'window vanished mid-focus', retryable:true}})),
@@ -77,7 +77,7 @@ a.equal(s.hubWarning({...live, status:'stale'}, [], now), 'Hub stale — snapsho
 a.equal(s.hubWarning({...live, status:'live', error:'degraded'}, [{kind:'agent'}], now), 'Hub warning: degraded');
 a.equal(s.hubWarning({enabled:false, connected:false, error:'ignored'}, [{kind:'agent'}], now), '');
 a.equal(s.unavailableReason({...live, status:'stale'}, now), 'Hub stale; snapshot 10s old; this is a last-known row');
-const knownAgent = {id:'agent-a', kind:'agent', title:'ask · gibson'};
+const knownAgent = {id:'agent-a', kind:'agent', title:'ask · atlas'};
 const native = {address:'0xlocal', title:'Local'};
 a.deepEqual(s.retainLastKnownRows([knownAgent, native], [native], 'stale'), [native, knownAgent]);
 a.deepEqual(s.retainLastKnownRows([knownAgent], [], 'live'), []);
@@ -95,8 +95,8 @@ a.equal(s.reconcile(w, [w[0]], 'c'), 'a');
 a.equal(s.reconcile(w, [], 'c'), '');
 const mixed = [
   {address:'0x1', title:'Local'},
-  {id:'agent-a', kind:'agent', address:'', machine:'gibson', open_on_machine:false},
-  {id:'agent-b', kind:'agent', address:'', machine:'nacelle', open_on_machine:true}
+  {id:'agent-a', kind:'agent', address:'', machine:'atlas', open_on_machine:false},
+  {id:'agent-b', kind:'agent', address:'', machine:'testrig', open_on_machine:true}
 ];
 a.equal(s.indexOf(mixed, 'agent-a'), 1);
 a.equal(s.step(mixed, '0x1', 1), 'agent-a');

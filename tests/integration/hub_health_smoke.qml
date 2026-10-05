@@ -1,4 +1,4 @@
-// Run only in an isolated Plumbus Quickshell process. The staging directory
+// Run only in an isolated Testbed Quickshell process. The staging directory
 // provides qs.Commons/qs.Ui/qs.services links to the installed Omarchy sources
 // and a payload/ copy of the production QML and selection module.
 import QtQuick
