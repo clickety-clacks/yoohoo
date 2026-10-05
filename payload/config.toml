@@ -16,3 +16,10 @@ desktop_notifications_enabled = true
 enabled = false
 url = "http://127.0.0.1:8787"
 # machine = ""  # defaults to the local hostname
+# How to reach a remote agent's tmux session: "auto", "et", "mosh", "ssh" or
+# "local". auto uses et when this machine has the et client and the host's
+# etserver was observed reachable (so the terminal's light/dark mode follows
+# into remote apps), otherwise mosh, otherwise ssh. et and mosh fall back to
+# ssh if they cannot start. What Yoohoo observed about each host is kept under
+# ~/.local/state/window-attention/transport-capabilities/, never in this file.
+transport = "auto"

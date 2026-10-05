@@ -22,7 +22,8 @@ FILES = {
     **{
         f"payload/agent_window_resolver/{name}.py":
         f".local/share/window-attention/agent_window_resolver/{name}.py"
-        for name in ("__init__", "__main__", "cli", "collector", "linux", "model", "resolver")
+        for name in ("__init__", "__main__", "cli", "collector", "linux", "model", "resolver",
+                     "transports")
     },
     "payload/attention.lua": ".config/hypr/attention.lua",
     "payload/window-attention.service": ".config/systemd/user/window-attention.service",

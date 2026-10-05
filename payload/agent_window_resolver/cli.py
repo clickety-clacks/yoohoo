@@ -11,10 +11,9 @@ import time
 from typing import Any, BinaryIO, Mapping, Sequence
 
 from .linux import LinuxCollector
-from .model import Limits, Request, RequestError, parse_request
+from .model import VERSION, Limits, Request, RequestError, parse_request
 from .resolver import Resolver
 
-VERSION = "0.1.0"
 _HARD_REQUEST_BYTES = 262_144
 _HARD_STDOUT_BYTES = 1_048_576
 _HARD_STDERR_BYTES = 16_384
@@ -43,6 +42,7 @@ def _error_response(
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema": "agent-window-resolver.response.v1",
+        "resolverVersion": VERSION,
         "requestId": request_id,
         "operation": operation,
         "status": status,

@@ -294,7 +294,7 @@ class HubTests(unittest.TestCase):
         a = agent(machine="gibson", state="needs_attention", session="ask room")
         plan = {"available": True, "transport": "ssh", "terminal": "/bin/ghostty"}
         launch = hub.build_launch_argv(a, plan, "osanwe")
-        self.assertEqual(launch[:5], ["/bin/ghostty", "-e", "ssh", "--", "gibson"])
+        self.assertEqual(launch[:6], ["/bin/ghostty", "-e", "ssh", "-tt", "--", "gibson"])
         self.assertIn("sh -lc", launch[-1])
         self.assertIn("=ask room", launch[-1])
         self.assertEqual(hub.parse_remote_launch(launch), {
@@ -357,11 +357,16 @@ class HubTests(unittest.TestCase):
         a = agent(machine="gibson", state="needs_attention", session="ask room")
         plan = hub.connection_plan("gibson", "ask room", "osanwe", [],
                                    which=lambda name: "/bin/" + name)
-        self.assertEqual(plan["transport"], "mosh")
+        self.assertEqual((plan["transport"], plan["fallback"]), ("mosh", "ssh"))
         argv = hub.build_launch_argv(a, plan, "osanwe")
-        self.assertEqual(argv[:6], ["/bin/ghostty", "-e", "mosh", "--", "gibson", "sh"])
-        self.assertIn("=ask room", argv[-1])
-        self.assertNotIn(";", argv[-1])
+        # mosh starts inside the shared fallback launcher; the host and the
+        # remote command travel as positional arguments, never as script text.
+        self.assertEqual(argv[:4], ["/bin/ghostty", "-e", "sh", "-lc"])
+        self.assertEqual(argv[4], hub.TRANSPORT_LAUNCH_SCRIPT)
+        self.assertEqual(argv[5:7], ["transport-launch", "gibson"])
+        self.assertEqual(argv[-1], "mosh")
+        self.assertIn("=ask room", argv[7])
+        self.assertNotIn(";", argv[7])
         bad = copy.deepcopy(a)
         bad["machine"] = "gibson;touch /tmp/pwned"
         self.assertIsNone(hub.build_launch_argv(bad, plan, "osanwe"))

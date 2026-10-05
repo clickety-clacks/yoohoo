@@ -194,6 +194,16 @@ function plainReason(code, row) {
         return "tmux is not installed here, so the session cannot be attached.";
     case "mosh_and_ssh_unavailable":
         return "Neither mosh nor ssh is available to reach " + machine + ".";
+    case "no_transport_client":
+        return "None of et, mosh or ssh is installed here to reach " + machine + ".";
+    case "et_client_missing":
+        return "Yoohoo is set to connect with et, but et is not installed here.";
+    case "mosh_client_missing":
+        return "Yoohoo is set to connect with mosh, but mosh is not installed here.";
+    case "ssh_client_missing":
+        return "Yoohoo is set to connect with ssh, but ssh is not installed here.";
+    case "local_requires_local_target":
+        return "Yoohoo is set to transport \"local\", but this agent runs on " + machine + ".";
     case "invalid_machine":
         return "The agent's machine name cannot be used safely.";
     case "candidate_count":

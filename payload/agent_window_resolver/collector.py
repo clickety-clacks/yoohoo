@@ -291,6 +291,82 @@ def split_tmux_command(
     return _split_tmux_command(command)
 
 
+_TRANSPORTS = {"ssh", "mosh", "et"}
+# Eternal Terminal client options that consume the following argument. et
+# places the remote command in ``-c`` rather than positionally after the host.
+_ET_VALUE_OPTIONS = {
+    "-u", "--username", "-p", "--port", "-c", "--command", "--terminal-path",
+    "-t", "--tunnel", "-r", "--reversetunnel", "--jumphost", "--jport",
+    "--jserverfifo", "-v", "--verbose", "-k", "--keepalive", "-l", "--logdir",
+    "--ssh-socket", "--serverfifo", "--ssh-option",
+}
+_ET_FLAGS = {
+    "-e", "--noexit", "-x", "--kill-other-sessions", "--macserver",
+    "--logtostdout", "--silent", "-N", "--no-terminal", "-f",
+    "--forward-ssh-agent", "--telemetry",
+}
+
+
+def _et_host(value: str) -> str | None:
+    """Strip et's optional ``:port`` suffix; a bare IPv6 address has none."""
+    if not value or value.startswith("-"):
+        return None
+    if value.startswith("["):
+        host, separator, port = value[1:].partition("]")
+        if not separator or (port and not (port[:1] == ":" and port[1:].isdigit())):
+            return None
+        return host or None
+    if value.count(":") == 1:
+        host, port = value.split(":")
+        return host if host and port.isdigit() else None
+    return value
+
+
+def _et_command_hint(
+    command: Sequence[str],
+) -> tuple[str, str, TmuxCommand] | None:
+    """Parse ``et [options] [--] host`` with its tmux command in ``-c``."""
+    values = list(command)
+    remote: str | None = None
+    hosts: list[str] = []
+    while values:
+        value = values.pop(0)
+        if value == "--":
+            hosts.extend(values)
+            break
+        name, equals, inline = value.partition("=")
+        if value.startswith("--") and equals and name in _ET_VALUE_OPTIONS:
+            if name == "--command":
+                remote = inline
+            continue
+        if value.startswith("--") and equals and name in _ET_FLAGS:
+            continue
+        if value in _ET_VALUE_OPTIONS:
+            if not values:
+                return None
+            argument = values.pop(0)
+            if value in {"-c", "--command"}:
+                remote = argument
+            continue
+        if value in _ET_FLAGS:
+            continue
+        if value.startswith("-c") and len(value) > 2:
+            remote = value[2:]
+            continue
+        if value.startswith("-"):
+            return None
+        hosts.append(value)
+    if remote is None or len(hosts) != 1:
+        return None
+    host = _et_host(hosts[0])
+    if host is None:
+        return None
+    parsed = parse_tmux_command([remote])
+    if parsed is None:
+        return None
+    return "et", host, parsed
+
+
 def transport_command_hint(
     argv: Sequence[str],
 ) -> tuple[str, str, TmuxCommand] | None:
@@ -341,16 +417,18 @@ def transport_command_hint(
                         )
                     if parsed is not None and host and not host.startswith("-"):
                         return "mosh", host, parsed
-    start = 0 if values and PurePath(values[0]).name in {"ssh", "mosh"} else None
+    start = 0 if values and PurePath(values[0]).name in _TRANSPORTS else None
     if start is None:
         for index, value in enumerate(values[:-1]):
-            if value == "-e" and PurePath(values[index + 1]).name in {"ssh", "mosh"}:
+            if value == "-e" and PurePath(values[index + 1]).name in _TRANSPORTS:
                 start = index + 1
                 break
     if start is None:
         return None
     command = values[start:]
     kind = PurePath(command.pop(0)).name
+    if kind == "et":
+        return _et_command_hint(command)
     options = {
         "ssh": {"-B", "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J",
                 "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w"},
@@ -538,10 +616,19 @@ class ProbeIO(Protocol):
 class StaticCollector:
     """Return raw normalized observations to the real deterministic matcher."""
 
-    def __init__(self, snapshot: TopologySnapshot) -> None:
+    def __init__(
+        self, snapshot: TopologySnapshot,
+        transports: Mapping[str, object] | None = None,
+    ) -> None:
         self.snapshot = snapshot
+        self.transports = transports
         self.calls: list[Request] = []
 
     def collect(self, request: Request, deadline: Deadline) -> TopologySnapshot:
         self.calls.append(request)
         return self.snapshot
+
+    def observe_transports(
+        self, request: Request, deadline: Deadline
+    ) -> Mapping[str, object] | None:
+        return self.transports

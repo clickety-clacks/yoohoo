@@ -5,6 +5,10 @@ from dataclasses import dataclass
 import re
 from typing import Any, Mapping
 
+# The library version travels in every response envelope.  A caller that
+# needs a newer request field can then tell "this copy is too old" apart from
+# "my request is invalid": an older copy rejects the field without a version.
+VERSION = "0.2.0"
 MAX_PID = 4_194_304
 MAX_TICKS = (1 << 64) - 1
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
@@ -94,6 +98,7 @@ class Request:
     windows: tuple[Window, ...]
     prior: PriorCandidate | None
     limits: Limits
+    probe_transports: bool = False
 
 
 def canonical_machine(value: str) -> str:
@@ -364,7 +369,8 @@ def _parse_limits(value: Any) -> Limits:
 def parse_request(value: Any) -> Request:
     raw = _mapping(value, "request")
     allowed = {"schema", "requestId", "operation", "requestedRelation",
-               "target", "local", "windows", "prior", "limits"}
+               "target", "local", "windows", "prior", "limits",
+               "probeTransports"}
     required = {"schema", "requestId", "operation", "target", "local", "windows"}
     _exact_keys(raw, allowed, required, "request")
     if raw["schema"] != "agent-window-resolver.request.v1":
@@ -404,10 +410,18 @@ def parse_request(value: Any) -> Request:
         raise RequestError("invalid_prior", "revalidate requires prior")
     if operation == "verify-target" and (windows or prior is not None):
         raise RequestError("invalid_verify_target", "verify-target requires empty windows")
+    probe_transports = raw.get("probeTransports", False)
+    if not isinstance(probe_transports, bool):
+        raise RequestError("invalid_probe_transports", "probeTransports must be a boolean")
+    if "probeTransports" in raw and operation != "verify-target":
+        raise RequestError(
+            "invalid_probe_transports", f"{operation} forbids probeTransports",
+        )
     return Request(request_id, operation, relation, parse_target(raw["target"]),
                    canonical_machine(_machine(local["machine"], "local_machine")),
                    windows, prior,
-                   _parse_limits(raw["limits"]) if "limits" in raw else Limits())
+                   _parse_limits(raw["limits"]) if "limits" in raw else Limits(),
+                   probe_transports)
 
 
 def socket_json(value: SocketSelector) -> dict[str, str]:

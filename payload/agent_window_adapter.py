@@ -182,6 +182,7 @@ def request_for_agent(
     *,
     operation: str = "resolve",
     prior: Mapping[str, Any] | None = None,
+    probe_transports: bool = False,
 ) -> dict[str, Any] | None:
     """Create a strict v1 request from one Hub agent."""
     machine = agent.get("machine")
@@ -269,6 +270,8 @@ def request_for_agent(
         request["requestedRelation"] = "visible_exact"
     if prior is not None:
         request["prior"] = dict(prior)
+    if probe_transports and operation == "verify-target":
+        request["probeTransports"] = True
     return request
 
 
@@ -282,6 +285,7 @@ def resolve_agent(
     proc_root: str = "/proc",
     collector: Any = None,
     resolver: Any = None,
+    probe_transports: bool = False,
 ) -> ResolveResult:
     """Perform one bounded, read-only resolver operation in-process."""
     if operation not in ("match", "resolve", "revalidate", "verify-target"):
@@ -303,7 +307,8 @@ def resolve_agent(
             }]}, (),
         )
     request = request_for_agent(
-        agent, windows, local_machine, operation=operation, prior=prior
+        agent, windows, local_machine, operation=operation, prior=prior,
+        probe_transports=probe_transports,
     )
     if request is None:
         return ResolveResult(
@@ -327,12 +332,24 @@ def verify_target(
     *,
     collector: Any = None,
     resolver: Any = None,
+    probe_transports: bool = False,
 ) -> ResolveResult:
-    """Verify the roster process/location before a transport attach."""
+    """Verify the roster process/location before a transport attach.
+
+    With ``probe_transports`` the resolver also reports which of et, mosh and
+    ssh reach the machine. A copy older than 0.2.0 rejects the field without a
+    ``resolverVersion``; see ``resolver_too_old``.
+    """
     return resolve_agent(
         agent, (), local_machine, operation="verify-target",
         collector=collector, resolver=resolver,
+        probe_transports=probe_transports,
     )
+
+
+def resolver_too_old(response: Mapping[str, Any]) -> bool:
+    """A response without resolverVersion came from a copy predating 0.2.0."""
+    return "resolverVersion" not in response
 
 
 def candidate_window(response: Mapping[str, Any]) -> dict[str, Any] | None:

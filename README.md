@@ -75,9 +75,9 @@ also needs `python-dbus` and `python-gobject` and a session bus that allows
 are not required dependencies.
 
 The optional Agentd Hub integration additionally needs a separately installed
-`agentd-hub` process serving loopback `/events`. Remote launch hints use
-Ghostty plus `mosh` when available and `ssh` as a fallback; these tools are
-only needed if you want to open a remote agent from the menu. Yoohoo never
+`agentd-hub` process serving loopback `/events`. Opening a remote agent from
+the menu uses Ghostty plus one of Eternal Terminal (`et`), `mosh` or `ssh`;
+these tools are only needed for that. Yoohoo never
 installs Hub, Agentd, SSH keys, or packages for you.
 
 On an otherwise supported Omarchy install, install any missing Python bindings:
@@ -243,7 +243,7 @@ use different timing or curves. The corresponding normalized fade is
 ### Terminal labels
 
 The menu prefers live local tmux session names over generic terminal titles.
-For explicit `ghostty -e mosh/ssh HOST tmux ...` launches, it can also show
+For explicit `ghostty -e et/mosh/ssh HOST tmux ...` launches, it can also show
 the original remote session name and host. Remote labels describe the launch;
 they cannot track later remote session switches or renames.
 
@@ -300,10 +300,36 @@ loss also triggers recovery, so an interrupted connection need not produce an
 explicit network error. This uses the existing Python GObject dependency;
 there are no new tmux hooks, harness wrappers, or snapshot polling jobs.
 
-When an available remote row has a launch hint, Yoohoo opens it in Ghostty,
-preferring `mosh` and falling back to `ssh`. This is a best-effort connection
-attempt, not an agent command channel. If the connection fails, the row remains
-unacknowledged and the local window keeps its attention state.
+When an available remote row has a launch hint, Yoohoo opens it in Ghostty.
+This is a best-effort connection attempt, not an agent command channel. If the
+connection fails, the row remains unacknowledged and the local window keeps its
+attention state.
+
+#### Choosing et, mosh or ssh
+
+`transport` in the `[agentd_hub]` section picks how:
+
+```toml
+[agentd_hub]
+transport = "auto"   # or "et", "mosh", "ssh", "local"
+```
+
+`auto` (the default) uses Eternal Terminal when this machine has `et` and the
+remote host's `etserver` was observed reachable, then `mosh`, then `ssh`. et
+passes the terminal's light/dark reports through, so apps in a remote tmux
+follow Ghostty's light/dark mode; mosh cannot relay them, but keeps its
+predictive local echo for slow links. Naming a transport uses it whenever its
+client is installed here. et and mosh fall back to `ssh -tt` in the same
+window if they cannot start; a normal detach never reconnects.
+
+The first time Yoohoo opens an agent on a host it checks, over the same SSH
+connection it already uses to verify the agent, whether etserver answers on its
+port and whether UDP reaches mosh's port range. The result is kept for a week
+in `~/.local/state/window-attention/transport-capabilities/HOST.json`, never in
+your config. Delete that file to re-check sooner; Yoohoo also drops it itself
+when et or mosh fails to start on a host that ssh still reaches. If the check
+times out, Yoohoo connects as before (mosh first). The policy is shared with
+Omarchy Ask: see agent-window-resolver's `docs/transport-policy-v1.md`.
 
 A Hub row only appears when there is something a person can do with it: either
 Yoohoo has matched the agent to a window on this machine, or the agent has a

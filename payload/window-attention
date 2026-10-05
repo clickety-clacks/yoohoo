@@ -49,6 +49,7 @@ from agentd_hub import (
     AgentdHub,
     agent_identity,
     build_launch_argv,
+    capability_path,
     connection_plan,
     launch_agent,
     make_agent_row,
@@ -58,6 +59,9 @@ from agentd_hub import (
     resolver_candidate_record_for_window,
     resolver_process_start_ticks,
     verify_agent_target,
+    read_capabilities,
+    record_capabilities,
+    transport_preference,
     verify_connection,
 )
 
@@ -1155,7 +1159,9 @@ class AttentionService:
                      if candidate and self._candidate_matches_agent(candidate, agent)
                      else None)
             plan = ({"available": True, "transport": "existing"} if match and self.hub.connected and source_reporting else
-                    connection_plan(machine, session, self.hub.config["machine"], [], process_argv)
+                    connection_plan(machine, session, self.hub.config["machine"], [], process_argv,
+                                    preference=transport_preference(self.config),
+                                    capabilities=read_capabilities(self.directory, machine))
                     if self.hub.connected and source_reporting
                     else {"available": False,
                           "reason": "hub_disconnected" if not self.hub.connected else "source_not_reached"})
@@ -1324,12 +1330,24 @@ class AttentionService:
         # A missing visible_exact proof may open a new transport only after
         # the shared resolver verifies the target process and pane.  A later
         # roster read re-binds that proof to the same claim before attach.
+        machine = str(agent.get("machine", ""))
+        remote = not agentd_hub.machine_matches(machine, self.hub.config["machine"])
+        capabilities = read_capabilities(self.directory, machine) if remote else None
         try:
-            verified = verify_agent_target(clicked_agent, self.hub.config["machine"])
+            verified = verify_agent_target(
+                clicked_agent, self.hub.config["machine"],
+                probe_transports=remote and capabilities is None,
+            )
         except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError):
             return False
         if verified.response.get("status") != "verified":
+            if "resolverVersion" not in verified.response:
+                self.log("bundled resolver predates 0.2.0 (resolver too old)")
             return False
+        # Discovery informs auto only. A missing or partial observation leaves
+        # capabilities unknown and the launch proceeds as mosh-first did.
+        if record_capabilities(self.directory, machine, verified.response):
+            capabilities = read_capabilities(self.directory, machine)
         if not self.hub.fetch_snapshot():
             return False
         rebound_snapshot = self.hub.snapshot() or {}
@@ -1357,7 +1375,8 @@ class AttentionService:
             return False
         session = str((agent.get("tmux") or {}).get("session", ""))
         plan = connection_plan(
-            str(agent.get("machine", "")), session, self.hub.config["machine"], clients, process_argv
+            str(agent.get("machine", "")), session, self.hub.config["machine"], clients, process_argv,
+            preference=transport_preference(self.config), capabilities=capabilities,
         )
         plan = verify_connection(agent, plan, self.hub.config["machine"])
         if plan is None:
@@ -1386,7 +1405,9 @@ class AttentionService:
                 != clicked_agent.get("activity", {}).get("observedAtUnixMs")):
             return False
         agent = final_agent
-        argv = build_launch_argv(agent, plan or {}, self.hub.config["machine"])
+        stale = capability_path(self.directory, str(agent.get("machine", "")))
+        argv = build_launch_argv(agent, plan or {}, self.hub.config["machine"],
+                                 str(stale) if stale else "")
         if argv is None:
             return False
         if not self.hub.reserve_launch(target, clicked_agent):

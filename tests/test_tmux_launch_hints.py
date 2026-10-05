@@ -173,6 +173,40 @@ class TmuxLaunchHintTests(unittest.TestCase):
                     "mosh-client", display, "100.92.53.87", "60022",
                 )))
 
+    def test_et_puts_the_remote_command_in_dash_c(self) -> None:
+        remote = "exec tmux attach-session -t =pimcamp"
+        for argv in (
+            ("et", "-c", "sh -lc " + shlex.quote(remote), "--", "gibson"),
+            ("/usr/bin/ghostty", "-e", "et", "-p", "2022", "-c",
+             "tmux attach -t =pimcamp", "gibson"),
+            ("et", "gibson:2022", "--command=tmux new-session -A -s pimcamp"),
+            ("et", "--serverfifo", "/tmp/etserver.fifo", "-c",
+             "tmux attach -t pimcamp", "mike@gibson"),
+        ):
+            with self.subTest(argv=argv):
+                hint = transport_hint(argv)
+                self.assertIsNotNone(hint)
+                kind, host, session, socket = hint
+                self.assertEqual((kind, session, socket), ("et", "pimcamp", None))
+                self.assertEqual(host.rsplit("@", 1)[-1], "gibson")
+
+    def test_et_socket_selector_and_ipv6_host(self) -> None:
+        self.assertEqual(
+            transport_hint(("et", "-c", "tmux -L work attach -t =a", "[fd7a::1]:2022")),
+            ("et", "fd7a::1", "a", SocketSelector("name", "work")),
+        )
+
+    def test_et_without_a_tmux_command_or_single_host_is_not_a_hint(self) -> None:
+        for argv in (
+            ("et", "gibson"),
+            ("et", "-c", "vim notes", "gibson"),
+            ("et", "-c", "tmux attach -t a", "gibson", "extra"),
+            ("et", "--unknown-option", "-c", "tmux attach -t a", "gibson"),
+            ("et", "-c"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertIsNone(transport_hint(argv))
+
     def test_new_and_attach_hints_rank_both_mosh_windows(self) -> None:
         windows = (
             Window("window-old", "0xabc", 100, "20", title="mosh"),

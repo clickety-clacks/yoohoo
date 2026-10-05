@@ -102,9 +102,11 @@ def resolve_agent_window(
 
 
 def verify_agent_target(
-    agent: Mapping[str, Any], local_machine: str,
+    agent: Mapping[str, Any], local_machine: str, *, probe_transports: bool = False,
 ) -> Any:
-    return _bundled_resolver_adapter().verify_target(agent, local_machine)
+    return _bundled_resolver_adapter().verify_target(
+        agent, local_machine, probe_transports=probe_transports,
+    )
 
 
 def resolver_candidate(response: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -282,20 +284,51 @@ def parse_sse(lines: Iterable[bytes | str]) -> Iterator[tuple[str, str, str]]:
 
 
 def parse_remote_launch(argv: list[str]) -> dict[str, str]:
-    """Parse only the explicit Ghostty -> mosh/ssh -> host -> tmux form."""
+    """Parse only the explicit Ghostty -> et/mosh/ssh -> host -> tmux forms.
+
+    That includes Yoohoo's own fallback launcher, ``sh -lc SCRIPT
+    transport-launch HOST REMOTE PORT STALE WRAPPED PRIMARY``.
+    """
     try:
         marker = argv.index("-e")
         command = list(argv[marker + 1 :])
-        if not command or Path(command.pop(0)).name not in {"mosh", "ssh"}:
-            return {}
-        transport = Path(argv[marker + 1]).name
-        if command and command[0] == "--":
+        if (len(command) == 10 and command[:2] in (["sh", "-lc"], ["sh", "-c"])
+                and command[3] == "transport-launch"
+                and command[9] in {"et", "mosh"}):
+            transport, host, command = command[9], command[4], [command[5]]
+        elif command and Path(command[0]).name == "et":
             command.pop(0)
-        # Connection options are intentionally not guessed around.  A caller
-        # can still use the live tmux/agent PID match in that case.
-        if not command or command[0].startswith("-"):
-            return {}
-        host = command.pop(0)
+            transport, host, remote = "et", "", None
+            while command:
+                value = command.pop(0)
+                if value == "--" and len(command) == 1:
+                    host = command.pop(0)
+                elif value in {"-p", "--port"} and command:
+                    command.pop(0)
+                elif value in {"-c", "--command"} and command:
+                    remote = command.pop(0)
+                elif not value.startswith("-") and not host:
+                    host = value
+                else:
+                    return {}
+            if not host or remote is None:
+                return {}
+            host = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+            command = [remote]
+        else:
+            if not command or Path(command.pop(0)).name not in {"mosh", "ssh"}:
+                return {}
+            transport = Path(argv[marker + 1]).name
+            # Yoohoo forces a remote PTY for ssh; skip only that flag.
+            if transport == "ssh" and command and command[0] == "-tt":
+                command.pop(0)
+            if command and command[0] == "--":
+                command.pop(0)
+            # Connection options are intentionally not guessed around.  A
+            # caller can still use the live tmux/agent PID match in that case.
+            if not command or command[0].startswith("-"):
+                return {}
+            host = command.pop(0)
         # Yoohoo's safe launch form sends one shell-quoted remote command so
         # session names containing spaces survive SSH and mosh. Reparse that
         # command locally for matching; never execute it here.
@@ -444,6 +477,160 @@ def match_agent_windows(
     return result
 
 
+# --- Transport policy -------------------------------------------------------
+# One definition shared with Omarchy Ask: agent-window-resolver's
+# docs/transport-policy-v1.md. tests/test_transport_policy.py checks this code
+# against that repository's vectors, which tests/fixtures carries verbatim.
+
+TRANSPORT_PREFERENCES = ("auto", "local", "et", "mosh", "ssh")
+CAPABILITY_SCHEMA = "transport-capabilities.v1"
+CAPABILITY_MAX_AGE_MS = 7 * 24 * 3600 * 1000
+# A record where every transport is unknown (the probe could not run there)
+# is kept briefly: long enough not to re-probe on every click.
+UNKNOWN_CAPABILITY_MAX_AGE_MS = 24 * 3600 * 1000
+TRANSPORT_LAUNCH_SCRIPT = "\n".join([
+    "host=$1 remote=$2 port=$3 stale=$4 wrapped=$5 primary=$6",
+    "if [ \"$primary\" = et ]; then",
+    "  if [ -n \"$port\" ]; then et -p \"$port\" -c \"$wrapped\" -- \"$host\"; else et -c \"$wrapped\" -- \"$host\"; fi",
+    "else",
+    "  mosh -- \"$host\" sh -lc \"$remote\"",
+    "fi",
+    "status=$?",
+    "[ \"$status\" -eq 0 ] && exit 0",
+    "# A failed start on a reachable host means the recorded capability is stale.",
+    "if [ -n \"$stale\" ] && ssh -o BatchMode=yes -o ConnectTimeout=5 -- \"$host\" true >/dev/null 2>&1; then",
+    "  rm -f -- \"$stale\"",
+    "fi",
+    "exec ssh -tt -- \"$host\" \"$wrapped\"",
+])
+
+
+def transport_preference(config: Mapping[str, Any] | None) -> str:
+    """Read ``[agentd_hub] transport``; anything unrecognised means auto."""
+    config = config or {}
+    section = config.get("hub") if isinstance(config.get("hub"), dict) else config.get("agentd_hub")
+    value = section.get("transport") if isinstance(section, dict) else None
+    return value if value in TRANSPORT_PREFERENCES else "auto"
+
+
+def choose_transport(
+    preference: str,
+    target_is_local: bool,
+    clients: Mapping[str, bool],
+    capabilities: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if preference not in TRANSPORT_PREFERENCES:
+        preference = "auto"
+    if target_is_local:
+        return {"transport": "local", "fallback": None}
+    if preference == "local":
+        return {"unavailable": "local_requires_local_target"}
+    if preference != "auto":
+        if not clients.get(preference):
+            return {"unavailable": preference + "_client_missing"}
+        transport = preference
+    elif clients.get("et") and capabilities and capabilities.get("et") == "available":
+        transport = "et"
+    elif clients.get("mosh") and (not capabilities or capabilities.get("mosh") != "unavailable"):
+        transport = "mosh"
+    elif clients.get("ssh"):
+        transport = "ssh"
+    else:
+        return {"unavailable": "no_transport_client"}
+    fallback = "ssh" if transport != "ssh" and clients.get("ssh") else None
+    return {"transport": transport, "fallback": fallback}
+
+
+def remote_shell_quote(value: str) -> str:
+    return "'" + str(value).replace("'", "'\\''") + "'"
+
+
+def transport_launch_argv(
+    transport: str,
+    fallback: str | None,
+    host: str,
+    remote: str,
+    et_port: int | None = None,
+    stale_file: str = "",
+) -> list[str]:
+    """The terminal command for a remote transport, with its ssh fallback."""
+    wrapped = "sh -lc " + remote_shell_quote(remote)
+    if transport == "ssh":
+        return ["ssh", "-tt", "--", host, wrapped]
+    if fallback is None:
+        if transport == "et":
+            port = ["-p", str(et_port)] if et_port else []
+            return ["et", *port, "-c", wrapped, "--", host]
+        return ["mosh", "--", host, "sh", "-lc", remote]
+    # A login shell, so the launcher sees the PATH the client lookup saw.
+    return ["sh", "-lc", TRANSPORT_LAUNCH_SCRIPT, "transport-launch", host, remote,
+            str(et_port or ""), stale_file, wrapped, transport]
+
+
+def capability_path(state_directory: Path, host: str) -> Path | None:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:@-]*", str(host or "")):
+        return None
+    host = normalize_host(host)
+    return Path(state_directory) / "transport-capabilities" / (host + ".json")
+
+
+def read_capabilities(
+    state_directory: Path, host: str, now_ms: int | None = None,
+) -> dict[str, Any] | None:
+    """Return recorded capability states for host, or None to re-probe."""
+    path = capability_path(state_directory, host)
+    try:
+        record = json.loads(path.read_text(encoding="utf-8")) if path else None
+    except (OSError, ValueError):
+        return None
+    now_ms = _now_unix_ms() if now_ms is None else now_ms
+    if (not isinstance(record, dict) or record.get("schema") != CAPABILITY_SCHEMA
+            or not isinstance(record.get("observedAtUnixMs"), int)
+            or not isinstance(record.get("transports"), dict)):
+        return None
+    transports = record["transports"]
+    result: dict[str, Any] = {}
+    for name in ("ssh", "et", "mosh"):
+        item = transports.get(name)
+        state = item.get("state") if isinstance(item, dict) else None
+        result[name] = state if state in {"available", "unavailable", "unknown"} else "unknown"
+    limit = (UNKNOWN_CAPABILITY_MAX_AGE_MS
+             if all(result[name] == "unknown" for name in ("ssh", "et", "mosh"))
+             else CAPABILITY_MAX_AGE_MS)
+    if not 0 <= now_ms - record["observedAtUnixMs"] <= limit:
+        return None
+    port = (transports.get("et") or {}).get("port") if isinstance(transports.get("et"), dict) else None
+    result["etPort"] = port if isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535 else None
+    return result
+
+
+def record_capabilities(
+    state_directory: Path, host: str, response: Mapping[str, Any],
+    now_ms: int | None = None,
+) -> bool:
+    """Persist a resolver transport observation; unreachable is never written."""
+    transports = response.get("transports")
+    path = capability_path(state_directory, host)
+    if (path is None or not isinstance(transports, dict)
+            or transports.get("state") not in {"complete", "partial"}):
+        return False
+    record = {
+        "schema": CAPABILITY_SCHEMA,
+        "host": normalize_host(host),
+        "observedAtUnixMs": _now_unix_ms() if now_ms is None else now_ms,
+        "resolverVersion": response.get("resolverVersion"),
+        "transports": transports,
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    except OSError:
+        return False
+    return True
+
+
 def connection_plan(
     machine: str,
     session: str,
@@ -451,8 +638,14 @@ def connection_plan(
     clients: list[dict[str, Any]],
     process_argv: Callable[[int], list[str]] = _default_process_argv,
     which: Callable[[str], str | None] = shutil.which,
+    *,
+    preference: str = "auto",
+    capabilities: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Choose a safe terminal transport using local availability hints."""
+    """Choose a terminal transport from the preference and recorded capability.
+
+    Painting the menu only reads recorded capability; nothing is probed here.
+    """
     if not _safe_remote_part(machine, host=True):
         return {"available": False, "reason": "invalid_machine"}
     if not _safe_remote_part(session):
@@ -461,29 +654,26 @@ def connection_plan(
     tmux = which("tmux")
     if not terminal:
         return {"available": False, "reason": "ghostty_unavailable"}
-    if not tmux and machine_matches(machine, local_machine):
-        return {"available": False, "reason": "tmux_unavailable"}
-    hints = [_host_from_client(client, process_argv) for client in clients]
-    mosh = which("mosh")
-    ssh = which("ssh")
-    # A mosh launch to this machine is a positive local hint.  The executable
-    # check is enough to prefer mosh for a configured hub target; no probe is
-    # run merely to paint the menu.
     if machine_matches(machine, local_machine):
-        return {"available": bool(tmux), "transport": "local", "terminal": terminal}
-    if mosh:
-        return {"available": True, "transport": "mosh", "terminal": terminal}
-    if ssh:
-        return {"available": True, "transport": "ssh", "terminal": terminal}
-    if any(info.get("host") and machine_matches(info.get("host", ""), machine) for info in hints):
-        return {"available": False, "reason": "mosh_and_ssh_unavailable"}
-    return {"available": False, "reason": "mosh_and_ssh_unavailable"}
+        if not tmux:
+            return {"available": False, "reason": "tmux_unavailable"}
+        return {"available": True, "transport": "local", "terminal": terminal}
+    present = {name: bool(which(name)) for name in ("et", "mosh", "ssh")}
+    choice = choose_transport(preference, False, present, capabilities)
+    if "unavailable" in choice:
+        return {"available": False, "reason": choice["unavailable"]}
+    return {
+        "available": True, "transport": choice["transport"],
+        "fallback": choice["fallback"], "terminal": terminal,
+        "etPort": (capabilities or {}).get("etPort"),
+    }
 
 
 def build_launch_argv(
     agent: dict[str, Any],
     plan: dict[str, Any],
     local_machine: str,
+    stale_file: str = "",
 ) -> list[str] | None:
     if not plan.get("available"):
         return None
@@ -492,20 +682,20 @@ def build_launch_argv(
     session = str(location.get("session", ""))
     if not _safe_remote_part(session) or not _safe_remote_part(machine, host=True):
         return None
+    if machine.startswith("-"):
+        return None
     terminal = str(plan.get("terminal", "ghostty"))
     tmux_command = ["tmux", "attach-session", "-t", "=" + session]
     remote_command = "exec " + " ".join(shlex.quote(part) for part in tmux_command)
     transport = plan.get("transport")
     if transport == "local":
         return [terminal, "-e", *tmux_command]
-    if transport == "mosh":
-        return [terminal, "-e", "mosh", "--", machine, "sh", "-lc", remote_command]
-    if transport == "ssh":
-        # Wrap the remote command for the target's login shell. Without this,
-        # zsh treats tmux's `=session` exact-target syntax as an assignment.
-        return [terminal, "-e", "ssh", "--", machine,
-                "sh -lc " + shlex.quote(remote_command)]
-    return None
+    if transport not in {"et", "mosh", "ssh"}:
+        return None
+    return [terminal, "-e", *transport_launch_argv(
+        transport, plan.get("fallback"), machine, remote_command,
+        plan.get("etPort"), stale_file,
+    )]
 
 
 def verify_connection(
@@ -515,45 +705,32 @@ def verify_connection(
     runner: Callable[..., Any] = subprocess.run,
     which: Callable[[str], str | None] = shutil.which,
 ) -> dict[str, Any] | None:
-    """Verify the target before opening a terminal, with pre-attach fallback.
+    """Verify the target before opening a terminal.
 
-    This is intentionally called only after a user selects a row. A mosh
-    failure may fall back to SSH here, before any interactive terminal exists;
-    no fallback is attempted after the selected connection has been launched.
+    This is intentionally called only after a user selects a row. et and mosh
+    need a PTY, so every remote transport is preflighted over a PTY-free SSH
+    command; a transport that then fails to start falls back to SSH inside
+    the launched terminal (see TRANSPORT_LAUNCH_SCRIPT).
     """
     machine = str(agent.get("machine", ""))
     session = str((agent.get("tmux") or {}).get("session", ""))
     if not _safe_remote_part(machine, host=True) or not _safe_remote_part(session):
         return None
     transport = str(plan.get("transport", ""))
-    transports = [transport]
-    if transport == "mosh" and which("ssh"):
-        transports.append("ssh")
-    for candidate in transports:
-        if candidate == "local":
-            argv = ["tmux", "has-session", "-t", "=" + session]
-        elif candidate == "mosh" and which("mosh"):
-            # mosh needs a PTY and cannot be reliably preflighted from this
-            # daemon's non-interactive service context. Validate the exact
-            # remote tmux target over SSH, then launch mosh in Ghostty where
-            # it receives its PTY. This still preserves mosh preference.
-            if not which("ssh"):
-                continue
-            remote = "exec " + " ".join(shlex.quote(part) for part in ["tmux", "has-session", "-t", "=" + session])
-            argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "--", machine,
-                    "sh -lc " + shlex.quote(remote)]
-        elif candidate == "ssh" and which("ssh"):
-            remote = "exec " + " ".join(shlex.quote(part) for part in ["tmux", "has-session", "-t", "=" + session])
-            argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "--", machine,
-                    "sh -lc " + shlex.quote(remote)]
-        else:
-            continue
-        try:
-            runner(argv, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=6)
-            return {**plan, "transport": candidate, "verified": True}
-        except (OSError, subprocess.SubprocessError, ValueError):
-            continue
-    return None
+    has_session = ["tmux", "has-session", "-t", "=" + session]
+    if transport == "local":
+        argv = has_session
+    elif transport in {"et", "mosh", "ssh"} and which("ssh"):
+        remote = "exec " + " ".join(shlex.quote(part) for part in has_session)
+        argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "--", machine,
+                "sh -lc " + shlex.quote(remote)]
+    else:
+        return None
+    try:
+        runner(argv, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=6)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return {**plan, "verified": True}
 
 
 class AgentdHub:

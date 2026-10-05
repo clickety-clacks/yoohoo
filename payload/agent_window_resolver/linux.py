@@ -28,6 +28,7 @@ from .collector import (
     WindowObservation,
     transport_socket_eligible,
 )
+from .transports import TransportProber, unknown as _unknown_transports
 from .model import (
     MAX_PID,
     ProcessIdentity,
@@ -1419,6 +1420,20 @@ class LinuxCollector:
                 "remote target probing is skipped for best-effort matching",
             ),),
         )
+
+    def observe_transports(
+        self, request: Request, deadline: Deadline
+    ) -> dict[str, Any]:
+        """Observe which transports reach the verified target's machine."""
+        machine = request.target.identity.machine
+        if machine_matches(machine, request.local_machine):
+            return _unknown_transports("not_applicable", "target_is_local")
+        # Leave headroom so the whole request still answers inside its
+        # deadline; a probe that cannot finish reports partial, not failure.
+        timeout = min(deadline.remaining() - 0.5, 8.0)
+        return TransportProber(
+            ssh=self.ssh, python=self.python, environment=self._environment(),
+        ).probe(machine, timeout)
 
     def collect(self, request: Request, deadline: Deadline) -> TopologySnapshot:
         windows = tuple(self._window(request, window, deadline)

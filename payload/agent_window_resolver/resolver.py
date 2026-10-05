@@ -24,9 +24,14 @@ from .collector import (
     transport_command_hint as _transport_command_hint_shared,
     transport_socket_eligible,
 )
+from .transports import (
+    normalize as _normalize_transports,
+    unknown as _unknown_transports,
+)
 from .model import (
     MAX_PID,
     MAX_TICKS,
+    VERSION,
     PriorCandidate,
     ProcessIdentity,
     Request,
@@ -101,6 +106,7 @@ def _response(
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema": "agent-window-resolver.response.v1",
+        "resolverVersion": VERSION,
         "requestId": request.request_id if request is not None else request_id,
         "operation": request.operation if request is not None else operation,
         "status": status,
@@ -755,6 +761,14 @@ def _match_candidate(
                 "mosh_hint_not_exact_proof", "transport",
                 "mosh argv is useful matching evidence without exact UDP proof",
             ))
+        if any(item.transport_kind == "et" for item in hints):
+            # etserver holds the TCP connection while the remote tmux client
+            # descends from etterminal, which reaches etserver over a local
+            # socket shared by every et session. No endpoint pair links them.
+            _append_unique_reason(uncertainty, _reason(
+                "et_hint_not_exact_proof", "transport",
+                "et argv is useful matching evidence without exact endpoint proof",
+            ))
         if weak and not strong and (contradictory_machine or contradictory_session):
             _append_unique_reason(uncertainty, _reason(
                 "stale_transport_hint", "argv",
@@ -1114,6 +1128,20 @@ def _target_equal(left: Target, right: Target) -> bool:
             and left.tmux == right.tmux)
 
 
+def _observe_transports(
+    request: Request, collector: Collector, deadline: Deadline
+) -> dict[str, Any]:
+    """Report transport reachability; choosing one is the caller's policy."""
+    observe = getattr(collector, "observe_transports", None)
+    if observe is None:
+        return _unknown_transports("partial", "collector_cannot_observe")
+    try:
+        value = observe(request, deadline)
+    except Exception:
+        return _unknown_transports("partial", "collector_failure")
+    return _normalize_transports(value)
+
+
 class Resolver:
     """Resolve only from live observations; never performs an action."""
 
@@ -1205,13 +1233,18 @@ class Resolver:
                 )],
             )
         if request.operation == "verify-target":
-            return _response(
+            response = _response(
                 request, "verified", evidence=target_evidence,
                 verified_target={
                     **_target_json(target),
                     "evidence": target_evidence,
                 },
             )
+            if request.probe_transports:
+                response["transports"] = _observe_transports(
+                    request, collector, deadline
+                )
+            return response
         if request.operation == "revalidate":
             assert request.prior is not None
             if not _target_equal(request.prior.target, target):

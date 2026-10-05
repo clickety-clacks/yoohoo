@@ -1,0 +1,3421 @@
+{
+  "schema": "transport-policy.v1",
+  "description": "Shared conformance vectors for the transport preference in Yoohoo and Omarchy Ask. See docs/transport-policy-v1.md. Each app copies this file verbatim and tests its own implementation against it.",
+  "preferences": [
+    "auto",
+    "local",
+    "et",
+    "mosh",
+    "ssh"
+  ],
+  "policy": [
+    {
+      "name": "auto/all clients/unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/all clients/all capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/all clients/no-et capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/all clients/udp-blocked capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/all clients/et-only capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/all clients/et-unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/no-et clients/unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/no-et clients/all capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/no-et clients/no-et capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/no-et clients/udp-blocked capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/no-et clients/et-only capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/no-et clients/et-unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/all capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/no-et capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/udp-blocked capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/et-only capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/ssh-only clients/et-unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/none clients/unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/none clients/all capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/none clients/no-et capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/none clients/udp-blocked capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/none clients/et-only capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/none clients/et-unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/all capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/no-et capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/et-only capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "auto/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "auto",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "auto/local target",
+      "preference": "auto",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    },
+    {
+      "name": "local/all clients/unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/all clients/all capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/all clients/no-et capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/all clients/udp-blocked capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/all clients/et-only capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/all clients/et-unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/all capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/no-et capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/udp-blocked capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/et-only capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/no-et clients/et-unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/all capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/no-et capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/udp-blocked capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/et-only capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/ssh-only clients/et-unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/all capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/no-et capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/udp-blocked capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/et-only capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/none clients/et-unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/all capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/no-et capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/et-only capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "local",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "local_requires_local_target"
+      }
+    },
+    {
+      "name": "local/local target",
+      "preference": "local",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/all clients/unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/all clients/all capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/all clients/no-et capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/all clients/udp-blocked capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/all clients/et-only capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/all clients/et-unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "et/no-et clients/unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/no-et clients/all capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/no-et clients/no-et capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/no-et clients/udp-blocked capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/no-et clients/et-only capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/no-et clients/et-unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/all capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/no-et capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/udp-blocked capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/et-only capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/ssh-only clients/et-unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/all capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/no-et capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/udp-blocked capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/et-only capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/none clients/et-unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "et_client_missing"
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/all capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/no-et capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/et-only capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "et",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "et/local target",
+      "preference": "et",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    },
+    {
+      "name": "mosh/all clients/unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/all clients/all capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/all clients/no-et capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/all clients/udp-blocked capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/all clients/et-only capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/all clients/et-unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/all capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/no-et capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/udp-blocked capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/et-only capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/no-et clients/et-unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/all capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/no-et capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/udp-blocked capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/et-only capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/ssh-only clients/et-unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/all capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/no-et capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/udp-blocked capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/et-only capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/none clients/et-unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/all capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/no-et capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/et-only capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "mosh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "mosh_client_missing"
+      }
+    },
+    {
+      "name": "mosh/local target",
+      "preference": "mosh",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/all capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/no-et capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/udp-blocked capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/et-only capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/all clients/et-unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/all capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/no-et capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/udp-blocked capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/et-only capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/no-et clients/et-unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/all capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/no-et capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/udp-blocked capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/et-only capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/ssh-only clients/et-unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "ssh/none clients/unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/none clients/all capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/none clients/no-et capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/none clients/udp-blocked capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/none clients/et-only capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/none clients/et-unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/all capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/no-et capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/et-only capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "ssh",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "ssh_client_missing"
+      }
+    },
+    {
+      "name": "ssh/local target",
+      "preference": "ssh",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/all clients/unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/all clients/all capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/all clients/no-et capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/all clients/udp-blocked capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/all clients/et-only capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/all clients/et-unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/no-et clients/unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/no-et clients/all capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/no-et clients/no-et capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/no-et clients/udp-blocked capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/no-et clients/et-only capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/no-et clients/et-unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": true,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "mosh",
+        "fallback": "ssh"
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/all capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/no-et capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/udp-blocked capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/et-only capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/ssh-only clients/et-unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": true
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "transport": "ssh",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/none clients/unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/none clients/all capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/none clients/no-et capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/none clients/udp-blocked capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/none clients/et-only capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/none clients/et-unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/all capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "available"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/no-et capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "available"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/udp-blocked capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unavailable",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/et-only capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "available",
+        "mosh": "unavailable"
+      },
+      "expect": {
+        "transport": "et",
+        "fallback": null
+      }
+    },
+    {
+      "name": "bogus/et-no-ssh clients/et-unknown capability/remote",
+      "preference": "bogus",
+      "targetIsLocal": false,
+      "clients": {
+        "et": true,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": {
+        "ssh": "available",
+        "et": "unknown",
+        "mosh": "unknown"
+      },
+      "expect": {
+        "unavailable": "no_transport_client"
+      }
+    },
+    {
+      "name": "bogus/local target",
+      "preference": "bogus",
+      "targetIsLocal": true,
+      "clients": {
+        "et": false,
+        "mosh": false,
+        "ssh": false
+      },
+      "capabilities": null,
+      "expect": {
+        "transport": "local",
+        "fallback": null
+      }
+    }
+  ],
+  "launch": [
+    {
+      "name": "ssh fallback=None port=None",
+      "transport": "ssh",
+      "fallback": null,
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": null,
+      "staleFile": "",
+      "expect": [
+        "ssh",
+        "-tt",
+        "--",
+        "gibson",
+        "sh -lc 'exec tmux attach-session -t '\\''=it'\\''\\'\\'''\\''s mine:1.%3'\\'''"
+      ]
+    },
+    {
+      "name": "et fallback=ssh port=2022",
+      "transport": "et",
+      "fallback": "ssh",
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": 2022,
+      "staleFile": "/home/u/.local/state/app/transport-capabilities/gibson.json",
+      "expect": [
+        "sh",
+        "-lc",
+        "host=$1 remote=$2 port=$3 stale=$4 wrapped=$5 primary=$6\nif [ \"$primary\" = et ]; then\n  if [ -n \"$port\" ]; then et -p \"$port\" -c \"$wrapped\" -- \"$host\"; else et -c \"$wrapped\" -- \"$host\"; fi\nelse\n  mosh -- \"$host\" sh -lc \"$remote\"\nfi\nstatus=$?\n[ \"$status\" -eq 0 ] && exit 0\n# A failed start on a reachable host means the recorded capability is stale.\nif [ -n \"$stale\" ] && ssh -o BatchMode=yes -o ConnectTimeout=5 -- \"$host\" true >/dev/null 2>&1; then\n  rm -f -- \"$stale\"\nfi\nexec ssh -tt -- \"$host\" \"$wrapped\"",
+        "transport-launch",
+        "gibson",
+        "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+        "2022",
+        "/home/u/.local/state/app/transport-capabilities/gibson.json",
+        "sh -lc 'exec tmux attach-session -t '\\''=it'\\''\\'\\'''\\''s mine:1.%3'\\'''",
+        "et"
+      ]
+    },
+    {
+      "name": "et fallback=ssh port=None",
+      "transport": "et",
+      "fallback": "ssh",
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": null,
+      "staleFile": "",
+      "expect": [
+        "sh",
+        "-lc",
+        "host=$1 remote=$2 port=$3 stale=$4 wrapped=$5 primary=$6\nif [ \"$primary\" = et ]; then\n  if [ -n \"$port\" ]; then et -p \"$port\" -c \"$wrapped\" -- \"$host\"; else et -c \"$wrapped\" -- \"$host\"; fi\nelse\n  mosh -- \"$host\" sh -lc \"$remote\"\nfi\nstatus=$?\n[ \"$status\" -eq 0 ] && exit 0\n# A failed start on a reachable host means the recorded capability is stale.\nif [ -n \"$stale\" ] && ssh -o BatchMode=yes -o ConnectTimeout=5 -- \"$host\" true >/dev/null 2>&1; then\n  rm -f -- \"$stale\"\nfi\nexec ssh -tt -- \"$host\" \"$wrapped\"",
+        "transport-launch",
+        "gibson",
+        "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+        "",
+        "",
+        "sh -lc 'exec tmux attach-session -t '\\''=it'\\''\\'\\'''\\''s mine:1.%3'\\'''",
+        "et"
+      ]
+    },
+    {
+      "name": "mosh fallback=ssh port=None",
+      "transport": "mosh",
+      "fallback": "ssh",
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": null,
+      "staleFile": "/s/gibson.json",
+      "expect": [
+        "sh",
+        "-lc",
+        "host=$1 remote=$2 port=$3 stale=$4 wrapped=$5 primary=$6\nif [ \"$primary\" = et ]; then\n  if [ -n \"$port\" ]; then et -p \"$port\" -c \"$wrapped\" -- \"$host\"; else et -c \"$wrapped\" -- \"$host\"; fi\nelse\n  mosh -- \"$host\" sh -lc \"$remote\"\nfi\nstatus=$?\n[ \"$status\" -eq 0 ] && exit 0\n# A failed start on a reachable host means the recorded capability is stale.\nif [ -n \"$stale\" ] && ssh -o BatchMode=yes -o ConnectTimeout=5 -- \"$host\" true >/dev/null 2>&1; then\n  rm -f -- \"$stale\"\nfi\nexec ssh -tt -- \"$host\" \"$wrapped\"",
+        "transport-launch",
+        "gibson",
+        "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+        "",
+        "/s/gibson.json",
+        "sh -lc 'exec tmux attach-session -t '\\''=it'\\''\\'\\'''\\''s mine:1.%3'\\'''",
+        "mosh"
+      ]
+    },
+    {
+      "name": "et fallback=None port=4022",
+      "transport": "et",
+      "fallback": null,
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": 4022,
+      "staleFile": "",
+      "expect": [
+        "et",
+        "-p",
+        "4022",
+        "-c",
+        "sh -lc 'exec tmux attach-session -t '\\''=it'\\''\\'\\'''\\''s mine:1.%3'\\'''",
+        "--",
+        "gibson"
+      ]
+    },
+    {
+      "name": "mosh fallback=None port=None",
+      "transport": "mosh",
+      "fallback": null,
+      "host": "gibson",
+      "remote": "exec tmux attach-session -t '=it'\\''s mine:1.%3'",
+      "etPort": null,
+      "staleFile": "",
+      "expect": [
+        "mosh",
+        "--",
+        "gibson",
+        "sh",
+        "-lc",
+        "exec tmux attach-session -t '=it'\\''s mine:1.%3'"
+      ]
+    }
+  ]
+}

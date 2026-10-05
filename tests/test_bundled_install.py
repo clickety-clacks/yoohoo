@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -20,8 +21,13 @@ spec.loader.exec_module(installer)
 
 EXPECTED_RESOLVER = {
     "__init__.py", "__main__.py", "cli.py", "collector.py",
-    "linux.py", "model.py", "resolver.py",
+    "linux.py", "model.py", "resolver.py", "transports.py",
 }
+
+
+def git_blob_id(data: bytes) -> str:
+    """The id git gives this content, as recorded by scripts/sync-resolver.py."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
 class BundledInstallTests(unittest.TestCase):
@@ -51,6 +57,25 @@ class BundledInstallTests(unittest.TestCase):
         self.assertTrue(
             (self.home / ".local/share/window-attention/agent_window_adapter.py").is_file()
         )
+
+    def test_vendored_copy_is_the_recorded_upstream_commit(self):
+        source = ROOT / "payload/agent_window_resolver"
+        record = json.loads((source / "VENDORED.json").read_text())
+        self.assertEqual(record["upstream"],
+                         "https://github.com/clickety-clacks/agent-window-resolver")
+        self.assertRegex(record["commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(record["syncedOn"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(set(record["files"]), EXPECTED_RESOLVER)
+        self.assertEqual({path.name for path in source.glob("*.py")}, EXPECTED_RESOLVER)
+        for name, blob in record["files"].items():
+            with self.subTest(file=name):
+                self.assertEqual(git_blob_id((source / name).read_bytes()), blob,
+                                 "vendored file differs from the recorded commit; "
+                                 "re-run scripts/sync-resolver.py")
+        for upstream_path, extra in record["extras"].items():
+            with self.subTest(file=upstream_path):
+                self.assertEqual(
+                    git_blob_id((ROOT / extra["vendoredAt"]).read_bytes()), extra["blob"])
 
     def test_installed_adapter_resolves_and_revalidates_owned_python_pid(self):
         share = self.home / ".local/share/window-attention"
