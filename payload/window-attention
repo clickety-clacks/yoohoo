@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from contextlib import contextmanager
 import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import signal
+import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -17,12 +21,107 @@ import threading
 import time
 import tomllib
 
+def _load_bundled_hub():
+    """Load only the helper shipped with this daemon, never sys.path data."""
+    import importlib.util
+
+    candidates = (
+        Path(__file__).resolve().parent.parent / "share/window-attention/agentd_hub.py",
+        Path(__file__).with_name("agentd_hub.py"),
+    )
+    path = next((item for item in candidates if item.is_file()), None)
+    if path is None:
+        raise ModuleNotFoundError("bundled agentd_hub.py is missing")
+    spec = importlib.util.spec_from_file_location("agentd_hub", path)
+    if spec is None or spec.loader is None:
+        raise ImportError("bundled agentd_hub.py cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    # Dataclasses and the bundled resolver expect the module to be registered
+    # while its top-level code executes.
+    sys.modules["agentd_hub"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+agentd_hub = _load_bundled_hub()
+
+from agentd_hub import (
+    AgentdHub,
+    agent_identity,
+    build_launch_argv,
+    connection_plan,
+    launch_agent,
+    make_agent_row,
+    parse_remote_launch,
+    resolve_agent_window,
+    resolver_candidate_record,
+    resolver_candidate_record_for_window,
+    resolver_process_start_ticks,
+    verify_agent_target,
+    verify_connection,
+)
+
 TAG = "window-attention"
 PULSE_TAG = "window-attention-pulse"
 # Keep the fade duration aligned with speed=16 (deciseconds) in attention.lua.
 PULSE_FADE_SECONDS = 1.6
 PULSE_REST_SECONDS = 0.4
 VERSION = 1
+MAX_HUB_RESOLVES_PER_REFRESH = 8
+HUB_RESOLVE_CACHE_VERSION = 1
+HUB_RESOLVE_PASSIVE_TTL_SECONDS = 5.0
+MAX_ACTION_FAILURE_TEXT = 512
+MAX_ACTION_FAILURE_TARGET = 128
+
+
+def _bounded_action_text(value: object, fallback: str = "") -> str:
+    text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    return text[:MAX_ACTION_FAILURE_TEXT] or fallback
+
+
+def _resolver_action_failure(response: object) -> dict:
+    """Project one bounded resolver reason for the CLI/UI action path."""
+    if not isinstance(response, dict):
+        response = {}
+    status = _bounded_action_text(response.get("status"), "unreachable")
+    if isinstance(response.get("reason"), dict):
+        first = response["reason"]
+    else:
+        reasons = response.get("reasons")
+        first = reasons[0] if isinstance(reasons, list) and reasons else {}
+    if not isinstance(first, dict):
+        first = {}
+    reason = {
+        "code": _bounded_action_text(first.get("code"), "resolver_failed"),
+        "source": _bounded_action_text(first.get("source"), "internal"),
+        "message": _bounded_action_text(
+            first.get("message"), "window resolver could not prove a target"
+        ),
+        "retryable": first.get("retryable") is True,
+    }
+    return {"status": status, "reason": reason}
+
+
+def _action_failure_payload(operation: str, target: str, failure: object) -> dict:
+    """Build a small, stable JSON diagnostic for stderr."""
+    result = {
+        "error": "action_failed",
+        "operation": _bounded_action_text(operation, "open"),
+        "target": _bounded_action_text(target)[:MAX_ACTION_FAILURE_TARGET],
+    }
+    if isinstance(failure, dict):
+        result.update(_resolver_action_failure(failure))
+    else:
+        result.update({
+            "status": "unreachable",
+            "reason": {
+                "code": "action_failed",
+                "source": "internal",
+                "message": "window attention target could not be activated",
+                "retryable": True,
+            },
+        })
+    return result
 
 
 def config_path() -> Path:
@@ -76,7 +175,9 @@ def normalize_address(address: str) -> str:
 
 def get_clients() -> list[dict]:
     value = hypr_json("clients")
-    return value if isinstance(value, list) else []
+    if not isinstance(value, list):
+        raise ValueError("hyprctl clients returned a non-list inventory")
+    return value
 
 
 def client_for(address: str) -> dict | None:
@@ -132,7 +233,7 @@ def public_client(client: dict, previous: dict | None = None) -> dict:
 
 
 class AttentionService:
-    def __init__(self) -> None:
+    def __init__(self, *, background: bool = False) -> None:
         self.config = load_config()
         self.windows: dict[str, dict] = {}
         self.running = True
@@ -141,10 +242,42 @@ class AttentionService:
         self.directory.mkdir(parents=True, exist_ok=True)
         self.current_path = self.directory / "current.json"
         self.history_path = self.directory / "history.jsonl"
+        self.hub_match_path = self.directory / "hub-match-cache.json"
         self.lock_path = self.directory / "state.lock"
         self.thread_lock = threading.RLock()
         self.notification_loop = None
         self.fatal_error = False
+        self.hub_pending: dict[str, dict] = {}
+        self.hub_matches: dict[str, str] = {}
+        self.hub_proofs: dict[str, dict] = {}
+        self._resolver_condition = threading.Condition()
+        self._resolver_refresh_pending = False
+        self._resolver_focus_jobs: dict[str, dict[str, Any]] = {}
+        self._resolver_generation = 0
+        self._resolver_refresh_cursor = 0
+        self._resolver_agent_fingerprints: dict[str, tuple[Any, ...]] = {}
+        self._resolver_clients_fingerprint: tuple[Any, ...] | None = None
+        self._resolver_known_agent_ids: frozenset[str] = frozenset()
+        self._resolver_last_passive_resolve = 0.0
+        self._resolver_retry_at = 0.0
+        self._resolver_desktop_dirty = False
+        self._resolver_desktop_epoch = 0
+        self._resolver_sweep_signature: tuple[Any, ...] | None = None
+        self._resolver_sweep_ids: tuple[str, ...] = ()
+        self._resolver_sweep_cursor = 0
+        self._resolver_sweep_matches: dict[str, dict] = {}
+        self._resolver_stopping = False
+        self._resolver_thread: threading.Thread | None = None
+        # The short-lived CLI uses this to explain a failed activation to the
+        # panel or a caller.  It never changes whether an action is allowed.
+        self.last_action_failure: dict | None = None
+        self.hub = AgentdHub(
+            self.config,
+            self.directory,
+            self.on_hub_snapshot,
+            status_owner=background,
+            on_disconnect=self.clear_hub_matches,
+        )
 
     @contextmanager
     def state_lock(self):
@@ -171,6 +304,761 @@ class AttentionService:
         with self.history_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
+    def _read_hub_match_cache(self) -> dict[str, dict]:
+        try:
+            value = json.loads(self.hub_match_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(value, dict) or value.get("version") != HUB_RESOLVE_CACHE_VERSION:
+            return {}
+        records = value.get("matches")
+        if not isinstance(records, dict):
+            return {}
+        result: dict[str, dict] = {}
+        for identity, candidate in records.items():
+            if not isinstance(identity, str) or not isinstance(candidate, dict):
+                continue
+            window = candidate.get("window")
+            proof = candidate.get("proof")
+            match = candidate.get("match")
+            target = candidate.get("target")
+            proof_valid = (
+                isinstance(proof, dict)
+                and proof.get("state") == "complete"
+                and proof.get("relation") == "visible_exact"
+                and isinstance(proof.get("evidence"), list)
+                and bool(proof.get("evidence"))
+            )
+            match_valid = (
+                isinstance(match, dict)
+                and match.get("confidence") in {"high", "medium", "low"}
+                and isinstance(match.get("score"), int)
+                and not isinstance(match.get("score"), bool)
+                and 0 <= match["score"] <= 100
+                and isinstance(match.get("evidence"), list)
+                and bool(match.get("evidence"))
+                and isinstance(match.get("uncertainty"), list)
+            )
+            if (not isinstance(window, dict) or not str(window.get("address", ""))
+                    or not (proof_valid or match_valid)
+                    or not isinstance(target, dict)):
+                continue
+            result[identity] = candidate
+        return result
+
+    def _write_hub_match_cache(self, matches: dict[str, dict]) -> None:
+        temporary = self.hub_match_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps({
+            "version": HUB_RESOLVE_CACHE_VERSION,
+            "updated_at": time.time(),
+            "matches": matches,
+        }, separators=(",", ":")) + "\n", encoding="utf-8")
+        temporary.replace(self.hub_match_path)
+
+    @staticmethod
+    def _candidate_identity(candidate: dict) -> tuple[str, str, int, str] | None:
+        window = candidate.get("window")
+        if not isinstance(window, dict):
+            return None
+        address = normalize_address(str(window.get("address", "")))
+        stable_id = window.get("stableId")
+        pid = window.get("pid")
+        ticks = window.get("startTimeTicks")
+        if (not address or not isinstance(stable_id, str) or not stable_id
+                or isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0
+                or not isinstance(ticks, str)
+                or re.fullmatch(r"(?:0|[1-9][0-9]{0,19})", ticks) is None):
+            return None
+        return stable_id, address, pid, ticks
+
+    @staticmethod
+    def _candidate_matches_agent(candidate: dict, agent: dict) -> bool:
+        proof = candidate.get("proof")
+        match = candidate.get("match")
+        proof_valid = (
+            isinstance(proof, dict)
+            and proof.get("state") == "complete"
+            and proof.get("relation") == "visible_exact"
+        )
+        match_valid = (
+            isinstance(match, dict)
+            and match.get("confidence") in {"high", "medium", "low"}
+            and isinstance(match.get("score"), int)
+            and not isinstance(match.get("score"), bool)
+            and 0 <= match["score"] <= 100
+            and isinstance(match.get("evidence"), list)
+            and bool(match.get("evidence"))
+            and isinstance(match.get("uncertainty"), list)
+        )
+        if not (proof_valid or match_valid):
+            return False
+        target = candidate.get("target", {})
+        identity = target.get("identity", {}) if isinstance(target, dict) else {}
+        source = agent.get("id") or {}
+        if not isinstance(identity, dict) or not isinstance(source, dict):
+            return False
+        source_pid = source.get("pid")
+        source_ticks = source.get("startTimeTicks")
+        if (isinstance(source_pid, bool) or not isinstance(source_pid, int)
+                or not isinstance(source_ticks, (int, str))):
+            return False
+        if isinstance(source_ticks, int):
+            if source_ticks < 0:
+                return False
+            source_ticks = str(source_ticks)
+        location = target.get("location") if isinstance(target, dict) else None
+        # Agentd reports a process outside tmux as ``"tmux": null``; that is
+        # the same claim as an omitted key and must match a local target.
+        if agent.get("tmux") is None:
+            location_matches = location == {"kind": "local"}
+        else:
+            raw_tmux = agent.get("tmux")
+            if not isinstance(raw_tmux, dict):
+                return False
+            candidate_tmux = location.get("tmux") if isinstance(location, dict) else None
+            window_index = raw_tmux.get("windowIndex")
+            if isinstance(window_index, int) and not isinstance(window_index, bool):
+                window_index = str(window_index)
+            location_matches = (
+                isinstance(location, dict) and location.get("kind") == "tmux"
+                and isinstance(candidate_tmux, dict)
+                and candidate_tmux.get("session") == raw_tmux.get("session")
+                and candidate_tmux.get("windowIndex") == window_index
+                and candidate_tmux.get("paneId") == raw_tmux.get("paneId")
+            )
+            if "socket" in raw_tmux:
+                location_matches = location_matches and candidate_tmux.get("socket") == raw_tmux.get("socket")
+            else:
+                # Strict proof candidates normalize an omitted selector to an
+                # absolute socket path. Best-effort match candidates may
+                # retain the requested location without proving a server.
+                socket = candidate_tmux.get("socket") if isinstance(candidate_tmux, dict) else None
+                location_matches = location_matches and (
+                    (isinstance(socket, dict) and socket.get("kind") == "path"
+                     and isinstance(socket.get("value"), str)
+                     and socket["value"].startswith("/"))
+                    or (match_valid and socket is None)
+                )
+        return (
+            agentd_hub.machine_matches(str(identity.get("machine", "")), str(agent.get("machine", "")))
+            and identity.get("instanceId") == agent.get("instanceId")
+            and identity.get("pid") == source_pid
+            and identity.get("startTimeTicks") == source_ticks
+            and location_matches
+        )
+
+    @staticmethod
+    def _agent_claim_key(agent: dict) -> tuple[Any, ...] | None:
+        identity = agent.get("id") or {}
+        pid = identity.get("pid")
+        ticks = identity.get("startTimeTicks")
+        if (isinstance(pid, bool) or not isinstance(pid, int)
+                or not isinstance(ticks, (int, str))):
+            return None
+        if isinstance(ticks, int):
+            if ticks < 0:
+                return None
+            ticks = str(ticks)
+        raw_tmux = agent.get("tmux")
+        if "tmux" not in agent:
+            location = ("local",)
+        elif isinstance(raw_tmux, dict):
+            window_index = raw_tmux.get("windowIndex")
+            if isinstance(window_index, int) and not isinstance(window_index, bool):
+                window_index = str(window_index)
+            socket = raw_tmux.get("socket")
+            socket_key = None
+            if isinstance(socket, dict):
+                socket_key = (socket.get("kind"), socket.get("value"))
+            location = (
+                "tmux", raw_tmux.get("session"), window_index,
+                raw_tmux.get("paneId"), socket_key,
+            )
+        else:
+            return None
+        return (
+            str(agent.get("machine", "")).lower().rstrip("."),
+            agent.get("instanceId"), pid, ticks, location,
+        )
+
+    @classmethod
+    def _same_agent_claim(cls, left: dict, right: dict) -> bool:
+        return cls._agent_claim_key(left) == cls._agent_claim_key(right)
+
+    @classmethod
+    def _resolver_agent_fingerprint(cls, agent: dict) -> tuple[Any, ...]:
+        """Return only Hub fields that can change a resolver's target claim."""
+        activity = agent.get("activity")
+        if not isinstance(activity, dict):
+            activity = {}
+        return (
+            repr(cls._agent_claim_key(agent)),
+            str(agent.get("name") or ""),
+            str(agent.get("harness") or ""),
+            tuple(sorted((str(key), repr(value)) for key, value in activity.items())),
+        )
+
+    @staticmethod
+    def _resolver_desktop_fingerprint(
+        clients: list[dict], active: str | None,
+    ) -> tuple[Any, ...]:
+        """Capture resolver-relevant compositor topology, excluding noisy tags."""
+        rows = []
+        for client in clients:
+            rows.append((
+                normalize_address(str(client.get("address", ""))),
+                str(client.get("stableId", "")),
+                repr(client.get("pid")),
+                str(client.get("class", "")),
+                str(client.get("title", "")),
+                repr(client.get("focusHistoryID")),
+            ))
+        rows.sort(key=repr)
+        return normalize_address(str(active or "")), tuple(rows)
+
+    def _candidate_current(
+        self,
+        candidate: dict,
+        clients: list[dict],
+        *,
+        ticks_reader=None,
+    ) -> bool:
+        """Require one raw Hypr row and the same live PID/start identity."""
+        if ticks_reader is None:
+            ticks_reader = resolver_process_start_ticks
+        identity = self._candidate_identity(candidate)
+        if identity is None:
+            return False
+        stable_id, address, pid, ticks = identity
+        address_rows = [
+            client for client in clients
+            if normalize_address(str(client.get("address", ""))) == address
+        ]
+        if len(address_rows) != 1:
+            return False
+        matches = []
+        for client in clients:
+            client_address = normalize_address(str(client.get("address", "")))
+            client_stable = client.get("stableId")
+            if client_stable is None:
+                client_stable = "hypr:" + client_address
+            elif not isinstance(client_stable, str) or not client_stable:
+                return False
+            if (client_address == address and client_stable == stable_id
+                    and client.get("pid") == pid):
+                matches.append(client)
+        if len(matches) != 1:
+            return False
+        return ticks_reader(pid) == ticks
+
+    def _resolver_hint(self, agent: dict, clients: list[dict]) -> bool:
+        """Use transport argv only to bound remote probe work, never as proof."""
+        machine = str(agent.get("machine", ""))
+        if agentd_hub.machine_matches(machine, self.hub.config["machine"]):
+            return True
+        session = str((agent.get("tmux") or {}).get("session", ""))
+        if not session:
+            return False
+        for client in clients:
+            try:
+                info = parse_remote_launch(process_argv(int(client.get("pid") or 0)))
+            except (OSError, ValueError, TypeError):
+                info = {}
+            if (info.get("session") == session
+                    and agentd_hub.machine_matches(info.get("host", ""), machine)):
+                return True
+        return False
+
+    def _resolve_hub_matches(
+        self, agents: list[dict], clients: list[dict], generation: int | None = None,
+        resolve_identities: set[str] | frozenset[str] | None = None,
+        cached_matches: dict[str, dict] | None = None,
+    ) -> dict[str, dict]:
+        """Resolve one serialized snapshot batch; only the worker calls this."""
+        cached = copy.deepcopy(cached_matches) if cached_matches is not None else self._read_hub_match_cache()
+        current_ids = {agent_identity(agent) for agent in agents}
+        cached = {identity: candidate for identity, candidate in cached.items()
+                  if identity in current_ids and isinstance(candidate, dict)}
+        considered = 0
+        for agent in agents:
+            if generation is not None:
+                with self._resolver_condition:
+                    if (generation != self._resolver_generation or self._resolver_stopping
+                            or self._resolver_focus_jobs):
+                        return {}
+            identity = agent_identity(agent)
+            if resolve_identities is not None and identity not in resolve_identities:
+                continue
+            if considered >= MAX_HUB_RESOLVES_PER_REFRESH:
+                continue
+            considered += 1
+            cached.pop(identity, None)
+            try:
+                result = resolve_agent_window(
+                    agent, clients, self.hub.config["machine"],
+                    operation="match",
+                )
+                candidate = resolver_candidate_record(
+                    result.response, clients=clients, active_address=active_address()
+                )
+            except (OSError, ValueError, TypeError, RuntimeError) as error:
+                self.log(f"resolver probe unavailable for {identity}: {error}")
+                candidate = None
+            if candidate is not None and self._candidate_matches_agent(candidate, agent):
+                cached[identity] = candidate
+        return cached
+
+    def _update_resolver_metadata(self, generation: int, **updates: Any) -> bool:
+        with self._resolver_condition:
+            if generation != self._resolver_generation or self._resolver_stopping:
+                return False
+            desktop_epoch_seen = updates.pop("_resolver_desktop_epoch_seen", None)
+            for name, value in updates.items():
+                setattr(self, name, value)
+            if desktop_epoch_seen is not None:
+                self._resolver_desktop_dirty = (
+                    self._resolver_desktop_epoch != desktop_epoch_seen
+                )
+            return True
+
+    def _queue_resolver_refresh(
+        self, generation: int | None = None, *, desktop_dirty: bool = False,
+    ) -> None:
+        """Coalesce Hub snapshots; never probe from an SSE callback."""
+        with self._resolver_condition:
+            if (generation is not None
+                    and (generation != self._resolver_generation or self._resolver_stopping)):
+                return
+            if desktop_dirty:
+                self._resolver_desktop_dirty = True
+                self._resolver_desktop_epoch += 1
+            self._resolver_refresh_pending = True
+            self._resolver_condition.notify()
+
+    def _queue_focus_revalidation(self, identity: str, address: str) -> None:
+        """Queue one proof-bound revalidation for a focused Hub window."""
+        captured_agent = self._current_hub_agent(identity)
+        with self._resolver_condition:
+            self._resolver_generation += 1
+            # Hyprland has one active window.  A later focus event supersedes
+            # every older job; retaining both would spend a remote probe on a
+            # stale address before getting to the window the user actually
+            # focused.
+            self._resolver_focus_jobs.clear()
+            # A focus job may preempt an in-flight refresh.  Keep the latest
+            # snapshot refresh queued so the cancelled round is not lost.
+            self._resolver_refresh_pending = True
+            self._resolver_desktop_dirty = True
+            self._resolver_desktop_epoch += 1
+            self._resolver_focus_jobs[identity] = {
+                "identity": identity,
+                "address": address,
+                "generation": self._resolver_generation,
+                "agent": copy.deepcopy(captured_agent) if captured_agent is not None else None,
+            }
+            self._resolver_condition.notify()
+
+    def _start_resolver_worker(self) -> None:
+        with self._resolver_condition:
+            if self._resolver_thread is not None and self._resolver_thread.is_alive():
+                return
+            self._resolver_stopping = False
+            self._resolver_thread = threading.Thread(
+                target=self._resolver_worker, name="window-attention-resolver", daemon=True
+            )
+            self._resolver_thread.start()
+
+    def _stop_resolver_worker(self) -> None:
+        with self._resolver_condition:
+            self._resolver_stopping = True
+            self._resolver_refresh_pending = False
+            self._resolver_focus_jobs.clear()
+            self._resolver_generation += 1
+            self._resolver_condition.notify_all()
+        worker = self._resolver_thread
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(timeout=0.2)
+        self._resolver_thread = None
+
+    def _resolver_worker(self) -> None:
+        while True:
+            with self._resolver_condition:
+                while (not self._resolver_stopping and not self._resolver_refresh_pending
+                       and not self._resolver_focus_jobs):
+                    self._resolver_condition.wait()
+                if self._resolver_stopping:
+                    return
+                if self._resolver_focus_jobs:
+                    job = next(iter(self._resolver_focus_jobs.values()))
+                    self._resolver_focus_jobs.pop(job["identity"], None)
+                    kind = "focus"
+                else:
+                    self._resolver_refresh_pending = False
+                    job = {"generation": self._resolver_generation}
+                    kind = "refresh"
+            try:
+                if kind == "focus":
+                    self._run_focus_revalidation(job)
+                else:
+                    self._run_resolver_refresh(job["generation"])
+            except Exception as error:  # a failed probe must not kill attention handling
+                self.log(f"resolver worker error: {error}")
+
+    def _current_hub_agent(self, identity: str) -> dict | None:
+        snapshot = self.hub.snapshot() or {}
+        return next((agent for agent in snapshot.get("agents", [])
+                     if agent_identity(agent) == identity), None)
+
+    def _current_hub_state(self, identity: str) -> tuple[dict | None, bool]:
+        """Return the current claim and whether its source is reporting."""
+        snapshot = self.hub.snapshot() or {}
+        agent = next((candidate for candidate in snapshot.get("agents", [])
+                      if agent_identity(candidate) == identity), None)
+        if agent is None:
+            return None, False
+        machine = str(agent.get("machine", ""))
+        reporting = any(
+            str(source.get("machine", "")) == machine
+            and (source.get("health") or {}).get("state") == "reporting"
+            for source in snapshot.get("sources", [])
+        )
+        return agent, reporting
+
+    def _run_resolver_refresh(self, generation: int) -> None:
+        snapshot = self.hub.snapshot() or {}
+        healthy = {
+            str(source.get("machine", ""))
+            for source in snapshot.get("sources", [])
+            if (source.get("health") or {}).get("state") == "reporting"
+        }
+        agents = sorted(
+            (agent for agent in self.hub.pending_agents()
+             if str(agent.get("machine", "")) in healthy),
+            key=agent_identity,
+        )
+        current_ids = frozenset(agent_identity(agent) for agent in agents)
+        agent_fingerprints = {
+            agent_identity(agent): self._resolver_agent_fingerprint(agent)
+            for agent in agents
+        }
+        previous_ids = self._resolver_known_agent_ids
+        membership_changed = current_ids != previous_ids
+        changed_ids = {
+            identity for identity, fingerprint in agent_fingerprints.items()
+            if self._resolver_agent_fingerprints.get(identity) != fingerprint
+        }
+        now = time.monotonic()
+        with self._resolver_condition:
+            desktop_dirty = self._resolver_desktop_dirty
+            desktop_epoch = self._resolver_desktop_epoch
+        passive_due = now - self._resolver_last_passive_resolve >= HUB_RESOLVE_PASSIVE_TTL_SECONDS
+        initial = self._resolver_clients_fingerprint is None and not self._resolver_agent_fingerprints
+        sweep_continuation = (
+            self._resolver_sweep_signature is not None
+            and self._resolver_sweep_cursor < len(self._resolver_sweep_ids)
+        )
+        if now < self._resolver_retry_at and not (
+            membership_changed or changed_ids or desktop_dirty or sweep_continuation
+        ):
+            return
+        if not (
+            initial or desktop_dirty or passive_due
+            or membership_changed or changed_ids or sweep_continuation
+        ):
+            return
+        if (
+            not current_ids
+            and not previous_ids
+            and not self.hub_matches
+            and not self.hub_proofs
+            and not sweep_continuation
+        ):
+            self._update_resolver_metadata(
+                generation,
+                _resolver_retry_at=0.0,
+                _resolver_desktop_epoch_seen=desktop_epoch,
+            )
+            return
+        try:
+            clients = get_clients()
+        except (OSError, subprocess.SubprocessError, ValueError):
+            self._update_resolver_metadata(
+                generation,
+                _resolver_agent_fingerprints=agent_fingerprints,
+                _resolver_known_agent_ids=current_ids,
+                _resolver_retry_at=now + HUB_RESOLVE_PASSIVE_TTL_SECONDS,
+                _resolver_desktop_epoch_seen=desktop_epoch,
+            )
+            return
+
+        try:
+            active = active_address()
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+            active = None
+        desktop_fingerprint = self._resolver_desktop_fingerprint(clients, active)
+        desktop_changed = desktop_fingerprint != self._resolver_clients_fingerprint
+        if initial or desktop_dirty or desktop_changed or passive_due:
+            target_ids = set(current_ids)
+        elif membership_changed:
+            target_ids = set(current_ids - previous_ids) | changed_ids
+        else:
+            target_ids = changed_ids
+
+        if not target_ids and not membership_changed:
+            self._update_resolver_metadata(
+                generation,
+                _resolver_retry_at=0.0,
+                _resolver_desktop_epoch_seen=desktop_epoch,
+            )
+            return
+
+        sweep_signature = (
+            tuple(sorted(agent_fingerprints.items())),
+            desktop_fingerprint,
+            tuple(sorted(target_ids)),
+        )
+        if self._resolver_sweep_signature != sweep_signature:
+            if not self._update_resolver_metadata(
+                generation,
+                _resolver_sweep_signature=sweep_signature,
+                _resolver_sweep_ids=tuple(sorted(target_ids)),
+                _resolver_sweep_cursor=0,
+                _resolver_sweep_matches={},
+            ):
+                return
+
+        # A membership-only change (usually source unhealthy/removal) has no
+        # probes to run. Filter the cache and commit the removal immediately.
+        if not self._resolver_sweep_ids:
+            matches = self._resolve_hub_matches(
+                agents, clients, generation, resolve_identities=frozenset(),
+            )
+            with self._resolver_condition:
+                if generation != self._resolver_generation or self._resolver_stopping:
+                    return
+            accepted = self._accepted_hub_matches(agents, matches, clients)
+            self._apply_hub_matches(
+                accepted, generation,
+                resolver_state={
+                    "_resolver_agent_fingerprints": agent_fingerprints,
+                    "_resolver_clients_fingerprint": desktop_fingerprint,
+                    "_resolver_known_agent_ids": current_ids,
+                    "_resolver_retry_at": 0.0,
+                    "_resolver_desktop_epoch_seen": desktop_epoch,
+                    "_resolver_sweep_signature": None,
+                    "_resolver_sweep_ids": (),
+                    "_resolver_sweep_cursor": 0,
+                    "_resolver_sweep_matches": {},
+                },
+            )
+            return
+
+        page_ids = set(self._resolver_sweep_ids[
+            self._resolver_sweep_cursor:self._resolver_sweep_cursor + MAX_HUB_RESOLVES_PER_REFRESH
+        ])
+        matches = self._resolve_hub_matches(
+            agents, clients, generation,
+            resolve_identities=page_ids,
+            cached_matches=(self._resolver_sweep_matches
+                            if self._resolver_sweep_cursor else None),
+        )
+        with self._resolver_condition:
+            if generation != self._resolver_generation or self._resolver_stopping:
+                return
+        try:
+            final_clients = get_clients()
+        except (OSError, subprocess.SubprocessError, ValueError):
+            self._update_resolver_metadata(
+                generation,
+                _resolver_agent_fingerprints=agent_fingerprints,
+                _resolver_clients_fingerprint=desktop_fingerprint,
+                _resolver_known_agent_ids=current_ids,
+                _resolver_retry_at=now + HUB_RESOLVE_PASSIVE_TTL_SECONDS,
+                _resolver_desktop_epoch_seen=desktop_epoch,
+            )
+            return
+        if not self._update_resolver_metadata(
+            generation,
+            _resolver_sweep_matches=matches,
+            _resolver_sweep_cursor=self._resolver_sweep_cursor + len(page_ids),
+        ):
+            return
+        if self._resolver_sweep_cursor < len(self._resolver_sweep_ids):
+            self._queue_resolver_refresh(generation)
+            return
+
+        accepted = self._accepted_hub_matches(agents, matches, final_clients)
+        with self._resolver_condition:
+            if generation != self._resolver_generation or self._resolver_stopping:
+                return
+        self._apply_hub_matches(
+            accepted, generation,
+            resolver_state={
+                "_resolver_agent_fingerprints": agent_fingerprints,
+                "_resolver_clients_fingerprint": desktop_fingerprint,
+                "_resolver_known_agent_ids": current_ids,
+                "_resolver_retry_at": 0.0,
+                "_resolver_desktop_epoch_seen": desktop_epoch,
+                "_resolver_last_passive_resolve": (
+                    now if initial or desktop_changed or passive_due
+                    else self._resolver_last_passive_resolve
+                ),
+                "_resolver_sweep_signature": None,
+                "_resolver_sweep_ids": (),
+                "_resolver_sweep_cursor": 0,
+                "_resolver_sweep_matches": {},
+            },
+        )
+
+    def _accepted_hub_matches(
+        self, agents: list[dict], matches: dict[str, dict], clients: list[dict],
+    ) -> dict[str, dict]:
+        accepted: dict[str, dict] = {}
+        for agent in agents:
+            identity = agent_identity(agent)
+            candidate = matches.get(identity)
+            current, source_reporting = self._current_hub_state(identity)
+            if (candidate is not None and current is not None
+                    and source_reporting
+                    and self._same_agent_claim(agent, current)
+                    and self._candidate_matches_agent(candidate, current)
+                    and self._candidate_current(candidate, clients)):
+                accepted[identity] = candidate
+        return accepted
+
+    def _attention_owned(self, address: str) -> bool:
+        """Return whether local or Hub attention still owns this address."""
+        return address in self.windows or any(
+            match == address for match in self.hub_matches.values()
+        )
+
+    def _clear_unowned_tags(self, address: str) -> bool:
+        """Clear presentation only after the last attention owner is gone."""
+        address = normalize_address(address)
+        if not address or self._attention_owned(address):
+            return False
+        # Remove the transient override first so a base-tag failure cannot
+        # leave the window stuck in its bright pulse state.
+        try:
+            tag_window_with_name(address, PULSE_TAG, False)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        try:
+            tag_window(address, False)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return True
+
+    def _apply_hub_matches(
+        self, matches: dict[str, dict], generation: int,
+        resolver_state: dict[str, Any] | None = None,
+    ) -> bool:
+        with self.thread_lock:
+            with self._resolver_condition:
+                if generation != self._resolver_generation or self._resolver_stopping:
+                    return False
+            # Cache publication is part of the same checked commit as the
+            # in-memory proof and tags.  A disconnect/focus generation change
+            # must not leave stale authority on disk for the next process.
+            self._write_hub_match_cache(matches)
+            previous = dict(self.hub_matches)
+            self.hub_matches = {
+                identity: normalize_address(str((candidate.get("window") or {}).get("address", "")))
+                for identity, candidate in matches.items()
+            }
+            self.hub_proofs = dict(matches)
+            for address in set(previous.values()):
+                if address:
+                    self._clear_unowned_tags(address)
+            active = active_address()
+            for address in set(self.hub_matches.values()):
+                if address and address != active:
+                    try:
+                        tag_window(address, True)
+                    except (OSError, subprocess.SubprocessError):
+                        pass
+            if resolver_state:
+                desktop_epoch_seen = resolver_state.pop("_resolver_desktop_epoch_seen", None)
+                for name, value in resolver_state.items():
+                    setattr(self, name, value)
+                if desktop_epoch_seen is not None:
+                    self._resolver_desktop_dirty = (
+                        self._resolver_desktop_epoch != desktop_epoch_seen
+                    )
+            return True
+
+    def _run_focus_revalidation(self, job: dict[str, Any]) -> None:
+        identity = str(job["identity"])
+        address = normalize_address(str(job["address"]))
+        agent = job.get("agent")
+        current, source_reporting = self._current_hub_state(identity)
+        proof = self.hub_proofs.get(identity)
+        if (not isinstance(agent, dict) or current is None or not source_reporting
+                or proof is None or not self._same_agent_claim(agent, current)
+                or current.get("activity", {}).get("state")
+                   != agent.get("activity", {}).get("state")
+                or current.get("activity", {}).get("observedAtUnixMs")
+                   != agent.get("activity", {}).get("observedAtUnixMs")
+                or not self._candidate_matches_agent(proof, current)):
+            return
+        try:
+            clients = get_clients()
+            result = resolve_agent_window(
+                agent, clients, self.hub.config["machine"],
+                operation="match",
+            )
+            candidate = resolver_candidate_record_for_window(result.response, proof)
+            if candidate is None:
+                # Keep older injected test doubles and legacy proof caches
+                # compatible, but never accept a different window identity.
+                fallback = resolver_candidate_record(result.response)
+                if (fallback is not None
+                        and self._candidate_identity(fallback)
+                           == self._candidate_identity(proof)):
+                    candidate = fallback
+            # The compositor identity is the last pre-ack observation before
+            # the PID/start-time read.  Do not perform another activewindow
+            # probe after the final ticks check.
+            final_active = active_address()
+            final_clients = get_clients()
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError):
+            return
+        with self._resolver_condition:
+            if job["generation"] != self._resolver_generation or self._resolver_stopping:
+                return
+        current, source_reporting = self._current_hub_state(identity)
+        if (candidate is None or current is None or not source_reporting
+                or not self._same_agent_claim(agent, current)
+                or current.get("activity", {}).get("state")
+                   != agent.get("activity", {}).get("state")
+                or current.get("activity", {}).get("observedAtUnixMs")
+                   != agent.get("activity", {}).get("observedAtUnixMs")
+                or not self._candidate_matches_agent(candidate, current)
+                or normalize_address(str((candidate.get("window") or {}).get("address", ""))) != address
+                or final_active != address
+                or not self._candidate_current(candidate, final_clients)):
+            return
+        with self.thread_lock:
+            with self._resolver_condition:
+                if job["generation"] != self._resolver_generation or self._resolver_stopping:
+                    return
+            current, source_reporting = self._current_hub_state(identity)
+            if (current is None or not source_reporting
+                    or not self._same_agent_claim(agent, current)
+                    or current.get("activity", {}).get("state")
+                       != agent.get("activity", {}).get("state")
+                    or current.get("activity", {}).get("observedAtUnixMs")
+                       != agent.get("activity", {}).get("observedAtUnixMs")
+                    or not current.get("presence", {}).get("state") == "present"):
+                return
+            if not self.hub.acknowledge(identity, agent):
+                return
+            self.hub.clear_launch_intent(identity)
+            self.hub_pending.pop(identity, None)
+            self.hub_matches.pop(identity, None)
+            self.hub_proofs.pop(identity, None)
+            self._clear_unowned_tags(address)
+
     def write_state(self) -> None:
         payload = {
             "version": VERSION,
@@ -182,6 +1070,341 @@ class AttentionService:
         temporary = self.current_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         temporary.replace(self.current_path)
+
+    def on_hub_snapshot(self, _snapshot: dict, alerts: list[dict]) -> None:
+        """Turn new Agentd claims into ordinary Yoohoo history/sound events."""
+        for agent in alerts:
+            identity = agent_identity(agent)
+            self.hub_pending[identity] = agent
+            item = {
+                "kind": "agent",
+                "id": identity,
+                "title": agent.get("name") or agent.get("harness", "agent"),
+                "machine": agent.get("machine", ""),
+                "activity": agent.get("activity", {}),
+                "source": "agentd-hub",
+            }
+            self.record("attention", item)
+        # Only claims the menu will present may make a sound. A claim with
+        # neither a tmux session nor an already proven window is silent so
+        # the user is not summoned to an entry that never appears.
+        if any(self._agent_row_openable(self.hub_matches.get(agent_identity(agent)),
+                                        str((agent.get("tmux") or {}).get("session", "")))
+               for agent in alerts):
+            self.play_sound()
+        self._queue_resolver_refresh()
+
+    def refresh_hub_attention(self, audible_ids: set[str] | None = None) -> list[dict]:
+        """Queue proof refresh without making callers wait for probes."""
+        if self.hub.enabled and self.hub.connected:
+            self._queue_resolver_refresh()
+        return []
+
+    def clear_hub_matches(self) -> None:
+        """Remove visual tags immediately when the SSE stream goes away."""
+        with self.thread_lock:
+            addresses = set(self.hub_matches.values())
+            self.hub_matches.clear()
+            self.hub_proofs.clear()
+            for address in addresses:
+                self._clear_unowned_tags(address)
+            with self._resolver_condition:
+                self._resolver_generation += 1
+                self._resolver_refresh_pending = False
+                self._resolver_focus_jobs.clear()
+                # A disconnect removes presentation authority. Do not let a
+                # reconnect with the same roster skip re-proving its windows
+                # merely because the passive fingerprint is unchanged.
+                self._resolver_agent_fingerprints = {}
+                self._resolver_clients_fingerprint = None
+                self._resolver_known_agent_ids = frozenset()
+                self._resolver_last_passive_resolve = 0.0
+                self._resolver_retry_at = 0.0
+                self._resolver_desktop_dirty = False
+                self._resolver_desktop_epoch += 1
+                self._resolver_sweep_signature = None
+                self._resolver_sweep_ids = ()
+                self._resolver_sweep_cursor = 0
+                self._resolver_sweep_matches = {}
+                self._resolver_condition.notify_all()
+
+    def hub_rows(self, native_addresses: set[str] | None = None) -> list[dict]:
+        """Project only live, pending hub agents into the menu list."""
+        if not self.hub.enabled:
+            return []
+        snapshot = self.hub.snapshot()
+        if not snapshot:
+            return []
+        healthy = {
+            str(source.get("machine", ""))
+            for source in snapshot.get("sources", [])
+            if (source.get("health") or {}).get("state") == "reporting"
+        }
+        agents = self.hub.pending_agents()
+        if not agents:
+            return []
+        match_cache = self._read_hub_match_cache() if self.hub.connected else {}
+        rows = []
+        native_addresses = native_addresses or {str(item.get("address", "")) for item in self.windows.values()}
+        for agent in agents:
+            machine = str(agent.get("machine", ""))
+            session = str((agent.get("tmux") or {}).get("session", ""))
+            source_reporting = machine in healthy
+            candidate = match_cache.get(agent_identity(agent))
+            match = ((candidate or {}).get("window")
+                     if candidate and self._candidate_matches_agent(candidate, agent)
+                     else None)
+            plan = ({"available": True, "transport": "existing"} if match and self.hub.connected and source_reporting else
+                    connection_plan(machine, session, self.hub.config["machine"], [], process_argv)
+                    if self.hub.connected and source_reporting
+                    else {"available": False,
+                          "reason": "hub_disconnected" if not self.hub.connected else "source_not_reached"})
+            if not self._agent_row_openable(match, session):
+                # A claim with neither a proven window nor an attachable
+                # tmux session has no action a user could take from the
+                # menu. Hiding it keeps native attention for its window
+                # intact and avoids an entry that can only fail.
+                continue
+            row = make_agent_row(agent, match, plan)
+            if not self.hub.connected or not source_reporting:
+                row["address"] = ""
+                row["open_on_machine"] = False
+            rows.append(row)
+        return rows
+
+    @staticmethod
+    def _agent_row_openable(match: object, session: str) -> bool:
+        """Whether a Hub claim can be presented as an actionable menu row.
+
+        Presentation rule: a matched local window is always presentable, a
+        tmux session is presentable as a connect target, and a claim with
+        neither is not shown as a standalone Agentd entry.
+        """
+        return bool(match) or bool(str(session or "").strip())
+
+    def dismiss(self, target: str) -> bool:
+        """Clear one attention entry without focusing or opening anything.
+
+        Native rows are cleared by address; Hub rows are acknowledged at the
+        claim the menu is currently showing. Dismissal never stops an agent
+        and never prevents a genuinely new claim from appearing later.
+        """
+        self.last_action_failure = None
+        target = str(target or "").strip()
+        if not target:
+            return False
+        if target.lower().startswith("0x"):
+            self.clear(target, "dismissed")
+            return True
+        if not self.hub.enabled:
+            return False
+        agent = next((candidate for candidate in self.hub.pending_agents()
+                      if agent_identity(candidate) == target), None)
+        if agent is None:
+            # Nothing is pending for this identity; the entry is already gone.
+            return True
+        if not self.hub.acknowledge(target, agent):
+            return False
+        self.hub.clear_launch_intent(target)
+        self.hub_pending.pop(target, None)
+        return True
+
+    def open_target(self, target: str, *, native: bool = False) -> bool:
+        """Acknowledge and focus/open a validated native window or hub agent."""
+        self.last_action_failure = None
+        target = str(target or "").strip()
+        if not target:
+            return False
+        if native:
+            try:
+                if not client_for(target):
+                    return False
+                focus_window(target)
+            except (OSError, subprocess.SubprocessError, ValueError):
+                return False
+            # This short-lived process has no authoritative Hub ownership
+            # state. The daemon handles the resulting activewindow event and
+            # clears tags only after accounting for all local and Hub owners.
+            return True
+        if not self.hub.enabled:
+            return False
+        # A fresh snapshot is the click-time authority for a short-lived CLI
+        # process.  The long-lived daemon remains SSE-driven.
+        if not self.hub.fetch_snapshot():
+            return False
+        snapshot = self.hub.snapshot() or {}
+        agent = next((candidate for candidate in snapshot.get("agents", [])
+                      if agent_identity(candidate) == target), None)
+        if not agent or agent.get("presence", {}).get("state") != "present":
+            return False
+        if target not in {agent_identity(candidate) for candidate in self.hub.pending_agents()}:
+            return False
+        # Keep the exact claim the user selected for acknowledgement.  A
+        # later snapshot may update activity while the resolver/transport
+        # probe is running; that newer epoch must not be acknowledged by this
+        # click.
+        clicked_agent = agent
+        try:
+            clients = get_clients()
+        except (OSError, subprocess.SubprocessError, ValueError):
+            # An unreadable compositor inventory is not proof of zero visible
+            # windows and must never authorize a duplicate attach.
+            return False
+        # The presentation cache is never an authority for a click.  Resolve
+        # this exact roster claim fresh; the core collector reacquires target
+        # and window evidence before any focus or attach action.
+        try:
+            resolved = resolve_agent_window(
+                agent, clients, self.hub.config["machine"],
+                operation="match",
+            )
+            proof = resolver_candidate_record(
+                resolved.response, clients=clients,
+                active_address=active_address() if clients else ""
+            )
+            response_status = resolved.response.get("status")
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError):
+            proof = None
+            response_status = "unreachable"
+            self.last_action_failure = _resolver_action_failure({
+                "status": response_status,
+                "reasons": [{
+                    "code": "resolver_exception",
+                    "source": "internal",
+                    "message": "window resolver could not complete",
+                    "retryable": True,
+                }],
+            })
+        if proof is not None:
+            try:
+                # If the Hub can provide a fresh roster, reject an identity or
+                # location change.  A transient roster read failure does not
+                # veto an already complete local window proof.
+                if self.hub.fetch_snapshot():
+                    roster = self.hub.snapshot() or {}
+                    roster_agent = next(
+                        (candidate for candidate in roster.get("agents", [])
+                         if agent_identity(candidate) == target), None
+                    )
+                    if roster_agent is None or not self._same_agent_claim(agent, roster_agent):
+                        return False
+                final_clients = get_clients()
+                if (proof is None or not self._candidate_matches_agent(proof, clicked_agent)
+                        or not self._candidate_current(proof, final_clients)):
+                    return False
+                address = normalize_address(str(proof["window"]["address"]))
+                focus_window(address)
+            except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError):
+                return False
+            if not self.hub.acknowledge(target, clicked_agent):
+                return False
+            # This is a short-lived CLI snapshot and cannot know whether the
+            # daemon still has another local/Hub owner for address. The
+            # daemon's refreshed Hub state performs authoritative tag cleanup
+            # after this acknowledgement.
+            self.hub.clear_launch_intent(target)
+            self.hub_pending.pop(target, None)
+            return True
+        if response_status != "unresolved":
+            if 'resolved' in locals():
+                self.last_action_failure = _resolver_action_failure(resolved.response)
+            return False
+        reasons = resolved.response.get("reasons") if 'resolved' in locals() else None
+        if (not isinstance(reasons, list)
+                or not any(isinstance(reason, dict)
+                           and reason.get("code") == "candidate_count"
+                           for reason in reasons)):
+            self.last_action_failure = _resolver_action_failure(
+                resolved.response if 'resolved' in locals() else {}
+            )
+            return False
+        if getattr(self.hub, "has_launch_intent", lambda *_args: False)(target, clicked_agent):
+            return False
+
+        # A missing visible_exact proof may open a new transport only after
+        # the shared resolver verifies the target process and pane.  A later
+        # roster read re-binds that proof to the same claim before attach.
+        try:
+            verified = verify_agent_target(clicked_agent, self.hub.config["machine"])
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError):
+            return False
+        if verified.response.get("status") != "verified":
+            return False
+        if not self.hub.fetch_snapshot():
+            return False
+        rebound_snapshot = self.hub.snapshot() or {}
+        rebound_agent = next(
+            (candidate for candidate in rebound_snapshot.get("agents", [])
+             if agent_identity(candidate) == target), None
+        )
+        rebound_source = next(
+            (candidate for candidate in rebound_snapshot.get("sources", [])
+             if str(candidate.get("machine", "")) == str(agent.get("machine", ""))), None
+        )
+        if (rebound_agent is None
+                or not self._same_agent_claim(agent, rebound_agent)
+                or not rebound_source
+                or (rebound_source.get("health") or {}).get("state") != "reporting"
+                or target not in {agent_identity(candidate)
+                                  for candidate in self.hub.pending_agents()}):
+            return False
+        agent = rebound_agent
+        try:
+            clients = get_clients()
+        except (OSError, subprocess.SubprocessError, ValueError):
+            # The pre-attach transport probe must also be bound to a complete
+            # compositor inventory, not an exception-as-empty fallback.
+            return False
+        session = str((agent.get("tmux") or {}).get("session", ""))
+        plan = connection_plan(
+            str(agent.get("machine", "")), session, self.hub.config["machine"], clients, process_argv
+        )
+        plan = verify_connection(agent, plan, self.hub.config["machine"])
+        if plan is None:
+            return False
+        # The pre-attach transport probe may take several seconds.  Rebind
+        # the final launch to the latest exact roster claim immediately before
+        # reserve/Popen; never launch for a stale process identity/location.
+        if not self.hub.fetch_snapshot():
+            return False
+        final_snapshot = self.hub.snapshot() or {}
+        final_agent = next(
+            (candidate for candidate in final_snapshot.get("agents", [])
+             if agent_identity(candidate) == target), None
+        )
+        final_source = next(
+            (candidate for candidate in final_snapshot.get("sources", [])
+             if str(candidate.get("machine", "")) == str(agent.get("machine", ""))), None
+        )
+        if (final_agent is None or not self._same_agent_claim(agent, final_agent)
+                or not final_source
+                or (final_source.get("health") or {}).get("state") != "reporting"
+                or target not in {agent_identity(candidate)
+                                  for candidate in self.hub.pending_agents()}):
+            return False
+        if (final_agent.get("activity", {}).get("observedAtUnixMs")
+                != clicked_agent.get("activity", {}).get("observedAtUnixMs")):
+            return False
+        agent = final_agent
+        argv = build_launch_argv(agent, plan or {}, self.hub.config["machine"])
+        if argv is None:
+            return False
+        if not self.hub.reserve_launch(target, clicked_agent):
+            return False
+        try:
+            subprocess.Popen(argv, start_new_session=True)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            self.hub.clear_launch_intent(target)
+            return False
+        # The user explicitly selected this remote row. Dismiss the attention
+        # claim after the terminal launch succeeds; later snapshots may mark a
+        # newly visible local match, but a failed post-launch connection must
+        # not leave an un-actionable duplicate alert behind.
+        if not self.hub.acknowledge(target, clicked_agent):
+            return False
+        self.hub.clear_launch_intent(target)
+        self.hub_pending.pop(target, None)
+        return True
 
     def play_sound(self) -> None:
         if not self.config.get("sound_enabled", True):
@@ -229,10 +1452,16 @@ class AttentionService:
             }
             focused = active_address()
             self.windows.pop(focused, None)
+            hub_addresses = set(self.hub_matches.values())
             for client in live.values():
                 address = client["address"]
                 if address in self.windows:
                     tag_window(address, True)
+                elif address in hub_addresses:
+                    # A reconnect must not erase a Hub-owned presentation.
+                    # Match application retains the active-window semantics.
+                    if address != focused:
+                        tag_window(address, True)
                 else:
                     # Disk state plus stable identity is authoritative. Tags
                     # alone may be residue from an interrupted pulse/clear.
@@ -266,11 +1495,24 @@ class AttentionService:
         address = normalize_address(raw_address)
         with self.state_lock():
             item = self.windows.pop(address, None)
-            if not item:
+            hub_identities = [identity for identity, match in self.hub_matches.items()
+                              if match == address]
+            for identity in hub_identities:
+                # Private topology heuristics are deliberately not allowed to
+                # acknowledge Hub claims.  The shared resolver proof worker
+                # owns focus-triggered Hub acknowledgement.
+                if reason == "closed":
+                    self.hub_matches.pop(identity, None)
+                    self.hub_proofs.pop(identity, None)
+                elif reason == "focused":
+                    self._queue_focus_revalidation(identity, address)
+            if not item and not hub_identities:
                 return
-            if reason != "closed" and client_for(address):
-                tag_window(address, False)
-                tag_window_with_name(address, PULSE_TAG, False)
+            if reason != "closed" and client_for(address) and (item or hub_identities):
+                self._clear_unowned_tags(address)
+            if not item:
+                self.write_state()
+                return
             self.record(reason, item)
             self.write_state()
         self.log(f'{reason}: {item["class"]} — {item["title"]}')
@@ -297,6 +1539,11 @@ class AttentionService:
         event, separator, data = line.rstrip("\n").partition(">>")
         if not separator:
             return
+        if event in {
+            "activewindow", "activewindowv2", "closewindow", "openwindow", "openwindowv2",
+            "windowtitle", "windowtitlev2", "movewindow", "movewindowv2",
+        }:
+            self._queue_resolver_refresh(desktop_dirty=True)
         if event == "urgent":
             self.attend(data)
         elif event == "activewindowv2":
@@ -317,6 +1564,8 @@ class AttentionService:
 
     def stop(self, *_args: object) -> None:
         self.running = False
+        self._stop_resolver_worker()
+        self.hub.stop()
         if self.notification_loop is not None:
             self.notification_loop.quit()
         if self.connection is not None:
@@ -380,12 +1629,20 @@ class AttentionService:
                     if not self.running:
                         break
                     live = {c["address"]: c for c in get_clients()}
-                    for address in list(self.windows):
+                    tracked = set(self.windows) | set(self.hub_matches.values())
+                    for address in list(tracked):
                         if address not in live:
-                            self.record("closed", self.windows.pop(address))
+                            if address in self.windows:
+                                self.record("closed", self.windows.pop(address))
+                            for identity, match in list(self.hub_matches.items()):
+                                if match == address:
+                                    self.hub_matches.pop(identity, None)
                             self.write_state()
                             continue
                         if address:
+                            tags = live[address].get("tags") or []
+                            if TAG not in tags:
+                                tag_window(address, True)
                             tag_window_with_name(address, PULSE_TAG, bright)
             except (OSError, subprocess.SubprocessError, ValueError) as error:
                 self.log(f"pulse temporarily unavailable: {error}")
@@ -394,6 +1651,8 @@ class AttentionService:
     def run(self) -> int:
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
+        self._start_resolver_worker()
+        self.hub.start()
         if self.config.get("desktop_notifications_enabled", True):
             threading.Thread(target=self.notifications, name="attention-notifications", daemon=True).start()
         threading.Thread(target=self.pulse, name="attention-pulse", daemon=True).start()
@@ -436,8 +1695,178 @@ class AttentionService:
                     except (OSError, subprocess.SubprocessError) as error:
                         self.log(f"shutdown tag cleanup failed: {address}: {error}")
                 self.record("service-stopped", item)
+            for address in set(self.hub_matches.values()):
+                for tag in (TAG, PULSE_TAG):
+                    try:
+                        tag_window_with_name(address, tag, False)
+                    except (OSError, subprocess.SubprocessError):
+                        pass
+            self.hub_matches.clear()
             self.windows.clear()
             self.write_state()
+
+
+def local_tmux_metadata() -> tuple[list[dict], list[dict]]:
+    """Read pane/client topology without inspecting pane contents."""
+    panes: list[dict] = []
+    clients: list[dict] = []
+    try:
+        result = subprocess.run(
+            ["tmux", "list-panes", "-a", "-F",
+             "#{session_name}\t#{window_index}\t#{pane_id}\t#{pane_pid}\t#{pane_tty}\t#{pane_active}\t#{window_active}"],
+            capture_output=True, text=True, check=True, timeout=0.4,
+        )
+        for line in result.stdout.splitlines():
+            fields = line.split("\t")
+            if len(fields) != 7:
+                continue
+            session, window, pane, pid, tty, pane_active, window_active = fields
+            try:
+                pid_value = int(pid)
+            except ValueError:
+                continue
+            panes.append({"session": session, "windowIndex": window, "paneId": pane,
+                          "panePid": pid_value, "paneTty": tty,
+                          "paneActive": pane_active == "1", "windowActive": window_active == "1"})
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    try:
+        result = subprocess.run(
+            ["tmux", "list-clients", "-F", "#{client_pid}\t#{session_name}\t#{client_tty}"],
+            capture_output=True, text=True, check=True, timeout=0.4,
+        )
+        for line in result.stdout.splitlines():
+            fields = line.split("\t")
+            if len(fields) != 3:
+                continue
+            pid, session, tty = fields
+            try:
+                pid_value = int(pid)
+            except ValueError:
+                continue
+            clients.append({"clientPid": pid_value, "session": session, "clientTty": tty})
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return panes, clients
+
+
+def hub_agent_is_visible(
+    agent: dict,
+    client: dict,
+    panes: list[dict],
+    tmux_clients: list[dict],
+    local_machine: str,
+) -> bool:
+    """Prove that a matched claim is the pane the user is currently seeing."""
+    if not agentd_hub.machine_matches(str(agent.get("machine", "")), local_machine):
+        # A remote launch match proves only host + session, not selected pane.
+        return False
+    location = agent.get("tmux") or {}
+    session = str(location.get("session", ""))
+    window = str(location.get("windowIndex", ""))
+    pane = str(location.get("paneId", ""))
+    if not session or not window or not pane:
+        # An Agentd process running directly in a terminal (without tmux) has
+        # no pane claim to validate; the exact Hypr client match is sufficient.
+        return True
+    if not any(
+        str(item.get("session", "")) == session
+        and str(item.get("windowIndex", "")) == window
+        and str(item.get("paneId", "")) == pane
+        and item.get("paneActive") is True
+        and item.get("windowActive") is True
+        for item in panes
+    ):
+        return False
+    hypr_pid = int(client.get("pid") or 0)
+    if not hypr_pid:
+        return False
+    return any(
+        str(item.get("session", "")) == session
+        and hypr_pid in process_ancestors(int(item.get("clientPid") or 0))
+        for item in tmux_clients
+    )
+
+
+def _remote_tmux_selector(agent: dict) -> tuple[str, list[str]] | None:
+    """Build a bounded, exact remote selector from structured Hub fields."""
+    machine = str(agent.get("machine", ""))
+    location = agent.get("tmux") or {}
+    session = str(location.get("session", ""))
+    window = str(location.get("windowIndex", ""))
+    pane = str(location.get("paneId", ""))
+    if not agentd_hub._safe_remote_part(machine, host=True):
+        return None
+    if not agentd_hub._safe_remote_part(session) or not re.fullmatch(r"\d+", window):
+        return None
+    if not re.fullmatch(r"%\d+", pane):
+        return None
+    commands = [
+        ["tmux", "select-window", "-t", f"={session}:{window}"],
+        ["tmux", "select-pane", "-t", pane],
+        ["tmux", "display-message", "-p", "-t", pane, "#{pane_id}"],
+    ]
+    remote = " && ".join(" ".join(shlex.quote(part) for part in command) for command in commands)
+    return machine, ["sh", "-lc", remote]
+
+
+def select_remote_tmux_pane(
+    agent: dict,
+    transport: str,
+    runner=subprocess.run,
+    which=shutil.which,
+) -> bool:
+    """Select and verify the exact pane in an already-open remote session."""
+    selector = _remote_tmux_selector(agent)
+    if selector is None:
+        return False
+    machine, shell = selector
+    transports = [transport] if transport in {"mosh", "ssh"} else []
+    if "mosh" not in transports:
+        transports.append("mosh")
+    if "ssh" not in transports:
+        transports.append("ssh")
+    pane = str((agent.get("tmux") or {}).get("paneId", ""))
+    for candidate in transports:
+        if candidate == "mosh" and which("mosh"):
+            argv = ["mosh", "--", machine, *shell]
+        elif candidate == "ssh" and which("ssh"):
+            argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "--", machine, shell[-1]]
+        else:
+            continue
+        try:
+            result = runner(argv, check=True, capture_output=True, text=True, timeout=8)
+            if str(getattr(result, "stdout", "")).strip() == pane:
+                return True
+        except (OSError, subprocess.SubprocessError, ValueError):
+            continue
+    return False
+
+
+def select_tmux_pane(agent: dict, local_machine: str) -> bool:
+    """Select the exact local pane before moving focus to its terminal."""
+    if not agentd_hub.machine_matches(str(agent.get("machine", "")), local_machine):
+        return True
+    location = agent.get("tmux") or {}
+    if not location:
+        return True
+    session = str(location.get("session", ""))
+    window = str(location.get("windowIndex", ""))
+    pane = str(location.get("paneId", ""))
+    if not session or not window or not pane:
+        return False
+    try:
+        subprocess.run(["tmux", "select-window", "-t", f"={session}:{window}"],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+        subprocess.run(["tmux", "select-pane", "-t", pane],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+        selected = subprocess.run(
+            ["tmux", "display-message", "-p", "-t", pane, "#{pane_id}"],
+            check=True, capture_output=True, text=True, timeout=1,
+        )
+        return selected.stdout.strip() == pane
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
 
 
 def read_state() -> dict:
@@ -448,6 +1877,159 @@ def read_state() -> dict:
         return {"version": VERSION, "updated_at": None, "windows": []}
 
 
+def process_argv(pid: int) -> list[str]:
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes()[:65536].decode(
+            "utf-8", errors="replace").rstrip("\0").split("\0")
+    except OSError:
+        return []
+
+
+def process_ancestors(pid: int) -> set[int]:
+    ancestors = set()
+    for _ in range(32):
+        if pid <= 1 or pid in ancestors:
+            break
+        ancestors.add(pid)
+        try:
+            pid = int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return ancestors
+
+
+def remote_session_title(argv: list[str]) -> str:
+    """Recognize an explicit remote tmux launch, never execute remote commands."""
+    try:
+        command = argv[argv.index("-e") + 1:]
+        if not command or Path(command[0]).name not in {"mosh", "ssh"}:
+            return ""
+        command = command[1:]
+        if command and command[0] == "--":
+            command = command[1:]
+        # Deliberately conservative: don't guess around connection options.
+        host, program, operation = command[:3]
+        if host.startswith("-") or Path(program).name != "tmux":
+            return ""
+        flag = "-s" if operation in {"new", "new-session"} else "-t"
+        if operation not in {"new", "new-session", "attach", "attach-session"}:
+            return ""
+        session = command[command.index(flag, 3) + 1]
+        if session:
+            return f"{session} · {host}"
+    except (ValueError, IndexError):
+        pass
+    return ""
+
+
+def enriched_state(payload: dict) -> dict:
+    """Presentation-only discovery: bounded local reads, no attention side effects."""
+    if not payload.get("windows"):
+        return payload
+    try:
+        clients = get_clients()
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return payload
+    sessions = []
+    try:
+        result = subprocess.run(
+            ["tmux", "list-clients", "-F", "#{client_pid}\t#{session_name}"],
+            capture_output=True, text=True, check=True, timeout=0.3)
+        for line in result.stdout.splitlines():
+            pid, name = line.split("\t", 1)
+            sessions.append((process_ancestors(int(pid)), name))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    windows = []
+    for item in payload["windows"]:
+        item = dict(item)
+        client = next((c for c in clients if c.get("address") == item.get("address")), None)
+        if client:
+            pid = client.get("pid", 0)
+            # Shared terminal processes cannot identify a particular window safely.
+            if pid and sum(c.get("pid") == pid for c in clients) == 1:
+                names = {name for ancestors, name in sessions if pid in ancestors}
+                title = next(iter(names)) if len(names) == 1 else ""
+                if not names:
+                    title = remote_session_title(process_argv(pid))
+                if title:
+                    item["window_title"] = str(client.get("title", ""))
+                    item["title"] = title
+        windows.append(item)
+    return {**payload, "windows": windows}
+
+
+def _row_address(row: object) -> str:
+    """Return a canonical non-empty compositor address for one menu row."""
+    if not isinstance(row, dict):
+        return ""
+    address = row.get("address")
+    return normalize_address(address) if isinstance(address, str) else ""
+
+
+def _mergeable_hub_row(row: object) -> bool:
+    """Whether a Hub row is safe to use as the native row's representative.
+
+    A Hub row can carry an address only while its exact local match is usable
+    for activation.  Keep the native row when either capability is absent;
+    this is especially important for stale/disconnected Hub projections.
+    """
+    if not isinstance(row, dict) or row.get("kind") != "agent":
+        return False
+    if not str(row.get("id") or "").strip() or not _row_address(row):
+        return False
+    return row.get("open_on_machine") is True and row.get("connection_available") is True
+
+
+def _merge_native_metadata(hub_row: dict, native_row: dict) -> dict:
+    """Keep Hub action identity while enriching it with native presentation data."""
+    merged = dict(hub_row)
+    # These fields describe the compositor attention item rather than the
+    # Agentd claim. Native values fill missing Hub presentation data when both
+    # rows describe the same visible window.
+    for field in (
+        "workspace_id", "workspace", "first_attention_at", "last_attention_at",
+        "count", "window_title",
+    ):
+        value = native_row.get(field)
+        if value is None or value == "":
+            continue
+        merged[field] = value
+    return merged
+
+
+def merge_attention_rows(native_rows: list[dict], hub_rows: list[dict]) -> list[dict]:
+    """Merge exact native/Hub duplicates without merging Hub agents together.
+
+    The Hub row remains the representative so its stable agent id and action
+    semantics continue through the panel's open/ack path.  Every Hub row is
+    retained, including multiple distinct agents mapped to one compositor
+    address; only the native duplicate is suppressed.
+    """
+    native_by_address: dict[str, dict] = {}
+    for native in native_rows:
+        address = _row_address(native)
+        if address and address not in native_by_address:
+            native_by_address[address] = native
+
+    represented_addresses: set[str] = set()
+    projected_hub_rows: list[dict] = []
+    for hub in hub_rows:
+        address = _row_address(hub)
+        if _mergeable_hub_row(hub) and address in native_by_address:
+            represented_addresses.add(address)
+            projected_hub_rows.append(_merge_native_metadata(hub, native_by_address[address]))
+        else:
+            projected_hub_rows.append(hub)
+
+    # Preserve the existing native-first ordering for rows that do not have a
+    # usable Hub representative, then append Hub rows in their source order.
+    return [
+        native for native in native_rows
+        if _row_address(native) not in represented_addresses
+    ] + projected_hub_rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -455,22 +2037,56 @@ def main() -> int:
     subparsers.add_parser("list", help="print the current attention list as JSON")
     focus = subparsers.add_parser("focus", help="focus an attention-needing window")
     focus.add_argument("address")
+    open_target_parser = subparsers.add_parser("open", help="focus or open a native window or Agentd agent")
+    open_target_parser.add_argument("target")
     clear = subparsers.add_parser("clear", help="clear attention without focusing a window")
     clear.add_argument("address")
+    dismiss = subparsers.add_parser("dismiss", help="dismiss a native window or Agentd entry without opening it")
+    dismiss.add_argument("target")
     subparsers.add_parser("play-sound", help="audition the configured attention sound")
     arguments = parser.parse_args()
 
     if arguments.command == "daemon":
-        return AttentionService().run()
+        return AttentionService(background=True).run()
     if arguments.command == "list":
-        print(json.dumps(read_state(), indent=2))
+        service = AttentionService()
+        payload = enriched_state(read_state())
+        native = payload.get("windows", [])
+        hub_rows = service.hub_rows({str(item.get("address", "")) for item in native})
+        payload = {
+            **payload,
+            "windows": merge_attention_rows(native, hub_rows),
+            "hub": service.hub.status(),
+        }
+        print(json.dumps(payload, indent=2))
         return 0
     if arguments.command == "focus":
-        focus_window(arguments.address)
-        return 0
+        service = AttentionService()
+        if service.open_target(arguments.address, native=True):
+            return 0
+        print(json.dumps(_action_failure_payload(
+            "focus", arguments.address, getattr(service, "last_action_failure", None),
+        ), separators=(",", ":"), sort_keys=True), file=sys.stderr)
+        return 1
+    if arguments.command == "open":
+        service = AttentionService()
+        if service.open_target(arguments.target):
+            return 0
+        print(json.dumps(_action_failure_payload(
+            "open", arguments.target, getattr(service, "last_action_failure", None),
+        ), separators=(",", ":"), sort_keys=True), file=sys.stderr)
+        return 1
     if arguments.command == "clear":
         AttentionService().clear(arguments.address, "cleared")
         return 0
+    if arguments.command == "dismiss":
+        service = AttentionService()
+        if service.dismiss(arguments.target):
+            return 0
+        print(json.dumps(_action_failure_payload(
+            "dismiss", arguments.target, getattr(service, "last_action_failure", None),
+        ), separators=(",", ":"), sort_keys=True), file=sys.stderr)
+        return 1
     if arguments.command == "play-sound":
         service = AttentionService()
         service.play_sound()

@@ -74,6 +74,12 @@ also needs `python-dbus` and `python-gobject` and a session bus that allows
 `BecomeMonitor`. Everything runs locally. Coding agents, Ghostty, and tmux
 are not required dependencies.
 
+The optional Agentd Hub integration additionally needs a separately installed
+`agentd-hub` process serving loopback `/events`. Remote launch hints use
+Ghostty plus `mosh` when available and `ssh` as a fallback; these tools are
+only needed if you want to open a remote agent from the menu. Yoohoo never
+installs Hub, Agentd, SSH keys, or packages for you.
+
 On an otherwise supported Omarchy install, install any missing Python bindings:
 
 ```bash
@@ -179,6 +185,8 @@ name so existing installs and dotfile tracking keep working.
 | Location | What lives there |
 | --- | --- |
 | `~/.local/bin/window-attention` | Daemon and CLI |
+| `~/.local/share/window-attention/agentd_hub.py` | Optional Hub SSE client and launch policy |
+| `~/.local/share/window-attention/agent_window_adapter.py` and `agent_window_resolver/` | In-process, read-only window identity proofs used by Hub matching |
 | `~/.config/window-attention/config.toml` | Your settings |
 | `~/.config/hypr/attention.lua` | Focus policy and theme-aware rules |
 | `~/.config/omarchy/plugins/window-attention.indicator/` | Yoohoo bell menu |
@@ -187,6 +195,11 @@ name so existing installs and dotfile tracking keep working.
 | `~/.local/share/window-attention/` | Docs, licenses, tests, diagnostic utility |
 | `~/.local/state/window-attention/` | Current list and history |
 | `~/.local/state/yoohoo/` | Installer record and backups |
+
+The window resolver ships inside Yoohoo. There is no separate resolver command
+to install, service to run, or path to configure. Yoohoo imports its bundled
+Python library; Ask bundles the same maintained source for its own adapter.
+Updating that shared source is a maintainer task, not an installation step.
 
 The installer currently targets standard home-directory paths. Custom XDG
 directory layouts are not yet supported. It appends `require("hypr.attention")`
@@ -202,6 +215,10 @@ sound_volume = 0.35
 sound_cooldown_ms = 1500
 history_enabled = true
 desktop_notifications_enabled = true
+
+[agentd_hub]
+enabled = false
+url = "http://127.0.0.1:8787"
 ```
 
 Restart `window-attention.service` after changing daemon settings. Disable
@@ -222,6 +239,82 @@ Yoohoo deliberately uses a slower cycle, adapted to theme colors rather than
 LED brightness. It approximates the patent's curve; actual Mac firmware may
 use different timing or curves. The corresponding normalized fade is
 `f(u) = (1 - cos(pi * u)) / 2` for `u` from 0 to 1.
+
+### Terminal labels
+
+The menu prefers live local tmux session names over generic terminal titles.
+For explicit `ghostty -e mosh/ssh HOST tmux ...` launches, it can also show
+the original remote session name and host. Remote labels describe the launch;
+they cannot track later remote session switches or renames.
+
+Discovery only reads local process metadata and queries the default local tmux
+server, with a short timeout. It never connects to another machine or reads
+conversation contents. Missing tools, unsupported launch syntax, and ambiguous
+shared terminal processes fall back to the window title. The original title is
+retained as `window_title` in enriched `window-attention list` output. This is
+menu presentation only; attention detection and stored history are unchanged.
+
+### Agents across machines (optional)
+
+Yoohoo can subscribe to a local [Agentd Hub](https://github.com/clickety-clacks/agentd-hub)
+instance. Hub is a separate, read-only process: it collects complete Agentd
+snapshots over the user's existing SSH access and serves them on loopback. Yoohoo
+does not install, discover, or manage Hub, and it never sends commands to Agentd.
+
+Install and start Hub separately, then opt in from
+`~/.config/window-attention/config.toml`:
+
+```toml
+[agentd_hub]
+enabled = false
+url = "http://127.0.0.1:8787"
+```
+
+Keep `enabled = false` unless that loopback endpoint is available. Hub rows are
+shown alongside native window alerts and retain their machine and Agentd
+identity. A disconnected source stays visible as unavailable; Yoohoo never
+turns stale activity into idle and never lets an unavailable row acknowledge or
+open an agent. Reconnects start from the current complete snapshot, so a
+previous event is not replayed. Enabling Hub does not require SSH keys or
+credentials in Yoohoo's configuration.
+
+The bell reports Hub health separately from the attention count. Its states are
+`connecting`, `live`, `reconnecting`, `stale`, `suspended`, and `disabled`.
+`live` starts only after a validated snapshot; subsequent fresh heartbeats keep
+it live, while a connected socket by itself is not treated as healthy. Yoohoo
+expires an abandoned connection after 45 seconds (Hub heartbeats normally
+arrive every 15 seconds),
+and labels retained remote rows with the snapshot age while the source is
+reconnecting or stale. The UI derives this timeout from
+`lastSnapshotAtUnixMs` and `lastSeenAtUnixMs`, so an old cached status cannot
+silently become green; a quiet but healthy roster remains live when heartbeats
+are fresh. Malformed or legacy bool-only health data fails closed
+and leaves remote rows unavailable. The bar adds `…` while connecting and `!`
+for stale, reconnecting, or suspended Hub state; those outage states use the
+urgent theme color even when no attention windows are waiting.
+
+Yoohoo listens for logind's sleep/wake signals. Before sleep it marks the feed
+suspended and closes the old stream; on wake it requests a new subscription.
+Failed connections retry with capped exponential backoff and jitter. Heartbeat
+loss also triggers recovery, so an interrupted connection need not produce an
+explicit network error. This uses the existing Python GObject dependency;
+there are no new tmux hooks, harness wrappers, or snapshot polling jobs.
+
+When an available remote row has a launch hint, Yoohoo opens it in Ghostty,
+preferring `mosh` and falling back to `ssh`. This is a best-effort connection
+attempt, not an agent command channel. If the connection fails, the row remains
+unacknowledged and the local window keeps its attention state.
+
+A Hub row only appears when there is something a person can do with it: either
+Yoohoo has matched the agent to a window on this machine, or the agent has a
+tmux session that can be attached. An agent with neither (for example Claude
+running inside another application's own window) is not listed as a standalone
+Agentd entry and makes no sound; the native attention alert for its window,
+if any, still works as usual. When an entry that was listed can no longer be
+opened, the menu says why in plain language and offers **Dismiss alert** (or
+press `D`). Dismissing clears that one entry only; the agent keeps running and
+a genuinely new request for attention appears again. The same action is
+available as `window-attention dismiss <target>` for a row id or address.
 
 ## How she knows
 
@@ -262,6 +355,7 @@ reads the list. Only an explicit menu selection requests focus.
 
 ```bash
 window-attention list
+window-attention dismiss <row-id-or-address>
 window-attention play-sound
 systemctl --user status window-attention
 journalctl --user -u window-attention
@@ -286,6 +380,14 @@ compatibility with other Omarchy versions require live testing. Live checks
 on the original deployment exercised both native urgency and real terminal
 desktop notifications, unchanged focus, sound playback, interpolated border
 pixels, menu selection, acknowledgement, and shutdown cleanup.
+
+For a disposable Agentd/Hub wire check on a prepared Plumbus testbed, run
+`python3 tests/integration/plumbus_hub_wire.py`. It creates one synthetic
+Codex process in a uniquely named tmux session, forces Hub's explicit
+hosts-file fallback with temporary discovery shims, verifies the reporting
+snapshot on loopback port 8788, and cleans up that fixture session. The runner
+does not exercise cross-host SSH; it reports that scope explicitly because
+self-SSH may not be configured.
 
 For a native terminal check, arrange a delayed BEL in a terminal that supports
 compositor attention, switch away before it fires, then acknowledge it through

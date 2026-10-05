@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import tomllib
 import unittest
 
 spec = importlib.util.spec_from_file_location("installer", Path(__file__).resolve().parents[1] / "install.py")
@@ -69,6 +70,16 @@ class InstallTests(unittest.TestCase):
         target.write_text("modified after installation")
         installer.uninstall(self.home, False)
         self.assertEqual(target.read_text(), "modified after installation")
+
+    def test_hub_is_opt_in_and_does_not_add_an_install_dependency(self):
+        installer.install(self.home, False)
+        config = tomllib.loads((self.home / ".config/window-attention/config.toml").read_text())
+        self.assertEqual(config["agentd_hub"]["enabled"], False)
+        self.assertEqual(config["agentd_hub"]["url"], "http://127.0.0.1:8787")
+
+        # File-only staging is valid without an Agentd Hub binary, SSH client,
+        # or any live desktop service.
+        installer.uninstall(self.home, False)
 
 
 if __name__ == "__main__":

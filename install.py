@@ -16,6 +16,14 @@ PLUGIN = "window-attention.indicator"
 INCLUDE = 'require("hypr.attention")'
 FILES = {
     "payload/window-attention": ".local/bin/window-attention",
+    # Yoohoo ships its resolver implementation as ordinary package data.
+    "payload/agentd_hub.py": ".local/share/window-attention/agentd_hub.py",
+    "payload/agent_window_adapter.py": ".local/share/window-attention/agent_window_adapter.py",
+    **{
+        f"payload/agent_window_resolver/{name}.py":
+        f".local/share/window-attention/agent_window_resolver/{name}.py"
+        for name in ("__init__", "__main__", "cli", "collector", "linux", "model", "resolver")
+    },
     "payload/attention.lua": ".config/hypr/attention.lua",
     "payload/window-attention.service": ".config/systemd/user/window-attention.service",
     "payload/config.toml": ".config/window-attention/config.toml",

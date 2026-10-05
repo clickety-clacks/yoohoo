@@ -7,3 +7,12 @@ history_enabled = true
 # Supplement native urgency with standard D-Bus notifications, only when the
 # authenticated sender PID owns exactly one compositor window.
 desktop_notifications_enabled = true
+
+# Optional local Agentd Hub subscription. Hub is a separate process and is
+# intentionally disabled by default; it must be running before enabling this
+# section. Yoohoo keeps its own acknowledgement ledger because the hub has no
+# command API.
+[agentd_hub]
+enabled = false
+url = "http://127.0.0.1:8787"
+# machine = ""  # defaults to the local hostname

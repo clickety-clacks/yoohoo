@@ -17,6 +17,39 @@ loader.exec_module(attention)
 
 
 class AttentionTests(unittest.TestCase):
+    def test_remote_session_title(self):
+        self.assertEqual(attention.remote_session_title([
+            "ghostty", "-e", "mosh", "--", "gibson", "tmux",
+            "new-session", "-A", "-s", "review guidance audit relief"
+        ]), "review guidance audit relief · gibson")
+        self.assertEqual(attention.remote_session_title([
+            "ghostty", "-e", "ssh", "gibson", "tmux", "attach", "-t", "work"
+        ]), "work · gibson")
+        for argv in ([], ["ghostty", "-e", "mosh"],
+                     ["ghostty", "-e", "ssh", "-p", "22", "host"]):
+            self.assertEqual(attention.remote_session_title(argv), "")
+
+    def test_live_session_overrides_launch_and_preserves_original(self):
+        payload = {"windows": [{"address": "0x1", "title": "osanwe:mike"}]}
+        clients = [{"address": "0x1", "pid": 10, "title": "osanwe:mike"}]
+        from types import SimpleNamespace
+        with patch.object(attention, "get_clients", return_value=clients), \
+             patch.object(attention.subprocess, "run", return_value=SimpleNamespace(stdout="11\tyoohoo\n")), \
+             patch.object(attention, "process_ancestors", return_value={11, 10}):
+            result = attention.enriched_state(payload)
+            self.assertEqual(result["windows"][0]["title"], "yoohoo")
+            self.assertEqual(result["windows"][0]["window_title"], "osanwe:mike")
+            self.assertEqual(payload["windows"][0]["title"], "osanwe:mike")
+            clients.append({"address": "0x2", "pid": 10})
+            self.assertEqual(attention.enriched_state(payload), payload)
+
+    def test_title_discovery_failure_keeps_fallback(self):
+        payload = {"windows": [{"address": "0x1", "title": "original"}]}
+        with patch.object(attention, "get_clients", return_value=[{"address": "0x1", "pid": 10}]), \
+             patch.object(attention.subprocess, "run", side_effect=FileNotFoundError), \
+             patch.object(attention, "process_argv", return_value=[]):
+            self.assertEqual(attention.enriched_state(payload), payload)
+
     def test_breath_has_slow_fades_and_quiet_interval(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {"XDG_STATE_HOME": directory}
@@ -75,7 +108,8 @@ class AttentionTests(unittest.TestCase):
                 if len(cycles) == 2:
                     service.running = False
             with patch.object(attention, "get_clients", side_effect=[
-                OSError("temporary failure"), [{"address": "0x1"}]]), \
+                OSError("temporary failure"),
+                [{"address": "0x1", "tags": [attention.TAG]}]]), \
                  patch.object(attention, "tag_window_with_name") as tag, \
                  patch.object(attention.time, "sleep", side_effect=tick):
                 service.pulse()
