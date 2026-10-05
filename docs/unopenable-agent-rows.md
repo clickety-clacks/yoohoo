@@ -1,7 +1,7 @@
 # Unopenable Agentd rows and dismissal
 
-Observed on lumen, September 17, 2026: the menu repeatedly listed
-`claude · lumen` entries whose selection failed with
+Observed on the desktop, September 17, 2026: the menu repeatedly listed
+`claude · desktop` entries whose selection failed with
 `agent_has_no_tmux_session`. The claims were Claude processes started by other
 applications (Omarchy Ask and the Tightbeam decision-request window). Agentd
 reported their turns; the Hub forwarded them; Yoohoo had no window match and
@@ -37,5 +37,5 @@ left to clear.
 Regression tests were added in `tests/test_hub.py` (projection rule, alert
 sound gating, dismiss for Hub and native rows, CLI failure payload) and
 `tests/test_selection.py` (plain-language reasons). Automated tests for this
-change run on Testbed, not lumen. Testbed was unreachable while the change
-was written; record the Testbed run here before installing.
+change run on the test machine, not the desktop. The test machine was unreachable while the change
+was written; record the test machine run here before installing.

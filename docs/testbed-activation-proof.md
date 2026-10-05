@@ -1,12 +1,12 @@
-# Testbed activation proof — September 14, 2026
+# The test machine activation proof — September 14, 2026
 
-Scope: the local `ask · lumen` lookup failure and creation of duplicate
-terminals when an SSH/mosh agent already has a window. Tests ran on Testbed;
-no test clicks or automated suites ran on lumen.
+Scope: the local `ask · desktop` lookup failure and creation of duplicate
+terminals when an SSH/mosh agent already has a window. Tests ran on the test machine;
+no test clicks or automated suites ran on the desktop.
 
 ## Observed results
 
-| Case | Production behavior observed on Testbed |
+| Case | Production behavior observed on the test machine |
 | --- | --- |
 | Local tmux client without session name in argv | The regression failed on the full-probe implementation and passed with current-client matching. |
 | Real Ghostty with local tmux, generic title, no session in argv | `AttentionService.open_target` focused the existing window from another workspace, acknowledged the alert, and preserved the window set. Full target probes and new-terminal launches were forbidden. |
@@ -54,7 +54,7 @@ installation dependency. The resolver remains bundled with each product.
 ## Installed-code correspondence
 
 Read-only SHA256 comparison confirmed identical files in the source payload,
-the Testbed test payload, and the lumen installation:
+the test machine test payload, and the desktop installation:
 
 ```
 a066409ee03216098b6375245531ad948415a0f9e0ce97caed1668686695cda2  window-attention
@@ -63,5 +63,5 @@ f2911ba1d4cca826542ed8c1a8be571a6688ac7f37443b7cd996775d7663af45  agent_window_r
 24174377501e53434c8786f75641be5be9e71baa9b0e96274e9e1aca72d40d42  agent_window_resolver/resolver.py
 ```
 
-Lumen received the fix on Mike's explicit instruction; only Yoohoo's tracker
+The desktop received the fix on Mike's explicit instruction; only Yoohoo's tracker
 was restarted. The actual user sessions and terminal windows were not altered.

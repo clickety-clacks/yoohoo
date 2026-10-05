@@ -61,10 +61,10 @@ The focused regression file is `tests/test_qualified_tmux_targets.py`. Ask's
 adapter replay is `tests/agent-launch-roundtrip.test.mjs`, with
 `tests/launch-roundtrip-matcher.py` in the Ask repository.
 
-## Testbed verification
+## The test machine verification
 
 The reviewed source hashes above were verified in the fresh staging directory
-`/tmp/yoohoo-qualified-validation.MC0F1qrv` on Testbed.
+`/tmp/yoohoo-qualified-validation.MC0F1qrv` on the test machine.
 
 - All 104 shared-core unit tests passed, including 14 new qualified-target
   tests. The focused new/existing launch-hint run also passed 23 tests.
@@ -83,9 +83,9 @@ The reviewed source hashes above were verified in the fresh staging directory
   That stronger replay (`1cfc3241...`) passes with the corrected core. Against
   the pre-fix `42db2f45...` / `24174377...` core, both SSH/path/distinct and
   mosh/path/distinct fail on an attempted second terminal launch, before the
-  conflict assertions, in `/tmp/ask-qualified-baseline.ahzHt7` on Testbed.
+  conflict assertions, in `/tmp/ask-qualified-baseline.ahzHt7` on the test machine.
 
-- Ask's actual SSH launch/repeat gate passed on Testbed at fixture hash
+- Ask's actual SSH launch/repeat gate passed on the test machine at fixture hash
   `948762b3cc561cdf2543012d74695406a18cd3699c1aa503339a3740602c51a9`.
   Production launch arguments opened one real Ghostty/private-SSH/tmux
   connection. Both repeated activations focused the same stable window and
@@ -110,7 +110,7 @@ The reviewed source hashes above were verified in the fresh staging directory
   exited naturally; it was not accepted. The reviewed fixture-only correction
   retries observations of the same recorded server and retains uncertain state.
 
-## Yoohoo installation on Lumen
+## Yoohoo installation on the desktop
 
 At 10:17 AM PT on September 15, the complete Yoohoo installer was run:
 `python -B install.py install`. It created backup
@@ -121,7 +121,7 @@ retained. Yoohoo was active, its Hub connection was healthy, the desktop shell
 answered its health check, and Hyprland reported no configuration errors.
 Tracked Yoohoo paths had no outstanding chezmoi differences.
 
-No tests or live connection fixtures ran on Lumen. No selective installed-file
+No tests or live connection fixtures ran on the desktop. No selective installed-file
 patches or manual installation-record edits were used for this deployment.
 Ask owns its separate complete installation; this record does not claim Ask
 was deployed.

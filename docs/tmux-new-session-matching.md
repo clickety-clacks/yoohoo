@@ -6,13 +6,13 @@ Both windows had the generic title `mosh`, but their process arguments
 contained the host and tmux session:
 
 ```text
-Existing: mosh-client -# -- atlas tmux new-session -A -s pimcamp |
-New:      mosh-client -# -- atlas sh -lc exec tmux attach-session -t =pimcamp |
+Existing: mosh-client -# -- remote-host tmux new-session -A -s pimcamp |
+New:      mosh-client -# -- remote-host sh -lc exec tmux attach-session -t =pimcamp |
 ```
 
 The old collector (`c080b305…`) rejected the existing window's `-A` option.
-Replaying both actual argument vectors on Testbed returned no hint for the
-existing window and a `atlas/pimcamp` hint for the new one. Removing only
+Replaying both actual argument vectors on the test machine returned no hint for the
+existing window and a `remote-host/pimcamp` hint for the new one. Removing only
 `-A` from the first vector made the old parser recognize it.
 
 [`tmux` documents `-A`](https://man.openbsd.org/tmux.1#new-session) as attaching
@@ -35,18 +35,18 @@ The identical canonical and Yoohoo regression file has SHA-256
 `aeecfd8036a36709942adde883d7c238b1510bed7cae8fce4fea273cea950f4a`.
 
 - Independent Sol high static review approved this exact pair.
-- On Testbed, **90 core tests and 108 Yoohoo tests passed**. The new tests
+- On the test machine, **90 core tests and 108 Yoohoo tests passed**. The new tests
   replay the actual old/new Pimcamp mosh argument vectors with generic
   `mosh` titles and require both windows to be returned as candidates.
-- An additional controlled Testbed replay exercised production
+- An additional controlled test-machine replay exercised production
   `AttentionService.open_target`, the bundled adapter, and real matcher.
   Compositor/process observations were injected, with the older `-A`
   window marked most recent. It selected that window, acknowledged the
   claim, and made zero subprocess launches. Focus was mocked: this was
   not a live mosh connection or desktop activation test.
-- No runtime tests or artificial attention signals were run on lumen.
+- No runtime tests or artificial attention signals were run on the desktop.
 
-Installed the bundled collector on lumen at **11:45 PM PT, September 14,
+Installed the bundled collector on the desktop at **11:45 PM PT, September 14,
 2026**. Only Yoohoo's tracker was restarted; its listeners started and its
 Hub status returned connected with no error. The daemon's earlier breathing
 border fix and all animation configuration were left unchanged.

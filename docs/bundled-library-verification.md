@@ -8,7 +8,7 @@ This records the initial bundled-library acceptance. A subsequent real-desktop
 scan correction and its newer test results are recorded in
 [desktop-scan-failure.md](desktop-scan-failure.md).
 
-## Verified on Testbed, September 14, 2026
+## Verified on the test machine, September 14, 2026
 
 - All 55 shared-core tests passed in an isolated copy.
 - Ask's real Node-process test passed using its bundled Python helper: local
@@ -47,7 +47,7 @@ The SSH gate is the canonical library's
 `tests/integration/test_private_ssh_match.py`, with
 `test_private_producer.py` and Yoohoo's existing `connection_fixture.py` /
 `private_sshd_fixture.py` test support. It was run from an independent temporary
-copy on Testbed with `YOOHOO_LIVE_TEST_HOST=1`; no canonical checkout was changed.
+copy on the test machine with `YOOHOO_LIVE_TEST_HOST=1`; no canonical checkout was changed.
 
 ## Source integration accepted
 
@@ -69,5 +69,5 @@ These checks do not establish ordinary roaming-mosh support, which remains
 explicitly deferred from this library-bundling change and owned by Yoohoo.
 They also do not establish Ghostty-over-SSH desktop ancestry support.
 
-No lumen installation, service restart, or user tmux changes were part of
-these checks. Testbed tests used isolated temporary installations.
+No desktop installation, service restart, or user tmux changes were part of
+these checks. The test machine tests used isolated temporary installations.

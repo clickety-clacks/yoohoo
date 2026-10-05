@@ -407,7 +407,7 @@ on the original deployment exercised both native urgency and real terminal
 desktop notifications, unchanged focus, sound playback, interpolated border
 pixels, menu selection, acknowledgement, and shutdown cleanup.
 
-For a disposable Agentd/Hub wire check on a prepared Testbed testbed, run
+For a disposable Agentd/Hub wire check on a prepared test machine, run
 `python3 tests/integration/testbed_hub_wire.py`. It creates one synthetic
 Codex process in a uniquely named tmux session, forces Hub's explicit
 hosts-file fallback with temporary discovery shims, verifies the reporting

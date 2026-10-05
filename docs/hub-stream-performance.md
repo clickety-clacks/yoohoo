@@ -2,7 +2,7 @@
 
 ## Failure and cause
 
-Lumen's installed `window-attention` process averaged 96.4% of one CPU core.
+The desktop's installed `window-attention` process averaged 96.4% of one CPU core.
 Per-thread inspection localized that usage to `agentd-hub`; the resolver
 worker and border-animation thread were not responsible for the hot loop.
 The CPU package measured 94°C. After stopping only the tracker it measured
@@ -13,7 +13,7 @@ retried the same buffered HTTP response. A timeout leaves that buffered reader
 unusable, so subsequent reads failed immediately. The loop both burned CPU and
 stopped receiving Hub updates while still appearing connected.
 
-An isolated real HTTP server on Testbed reproduced this with the installed
+An isolated real HTTP server on the test machine reproduced this with the installed
 module: after an initial snapshot and 0.8 seconds of silence, a two-second
 measurement consumed 2.002 CPU seconds (99.84% of one core). A second snapshot
 sent on the same connection never reached the listener. No live Hub, desktop,
@@ -27,7 +27,7 @@ reader thread closes the response. Read errors leave the stream and enter the
 existing reconnect backoff instead of retrying a poisoned reader in place.
 
 Regression tests cover delayed updates, CPU usage while quiet, shutdown,
-disconnect/reconnect, and read-error handling. Tests run on Testbed only.
+disconnect/reconnect, and read-error handling. Tests run on the test machine only.
 
 The corrected stream used 0.002435 CPU seconds over 45.000216 wall seconds
 (0.0054% of one core), receiving both snapshots on the same connection.
@@ -48,7 +48,7 @@ roughly 27% of one core. Every Hub snapshot queued full process collection,
 even when the waiting agents and terminal windows had not changed. The
 tracker was stopped again while this was corrected.
 
-A separate Testbed benchmark used two synthetic pending agents and twelve
+A separate test machine benchmark used two synthetic pending agents and twelve
 synthetic compositor rows referring to owned `sleep` processes. The production
 resolver and Linux collector were real; window dispatch and Hub input were
 injected. With 239 unchanged-input updates over 12 seconds, the old worker ran
@@ -69,10 +69,10 @@ during a scan. The empty pending state needs no window inventory. User clicks
 and focus revalidation remain fresh. Multi-page refreshes stop after one
 complete sweep instead of continually requeuing themselves.
 
-The final corrected worker passed the same Testbed benchmark with six
+The final corrected worker passed the same test machine benchmark with six
 resolver calls and six compositor inventories for 239 updates over 12 seconds,
 retaining both matching windows. It consumed 0.156546 CPU seconds (1.3045% of
-one core), versus 61.67% before. All 86 relevant tests passed on Testbed,
+one core), versus 61.67% before. All 86 relevant tests passed on the test machine,
 including stream and worker regressions. Tests also cover finite nine-agent
 coverage/cache merging, fresh focus validation, desktop event queueing,
 identical-input reconnects, and the empty pending state. Sol independently
@@ -86,7 +86,7 @@ Worker regression SHA256:
 
 ## Reproducing the measurements
 
-Run these on Testbed from a staged checkout. Both benchmark scripts enforce
+Run these on the test machine from a staged checkout. Both benchmark scripts enforce
 the test-machine hostname; neither creates windows nor touches tmux.
 
 ```sh
@@ -100,16 +100,16 @@ Hub, adapter, bundled-install, installer, selection, and release tests.
 
 ## Installation
 
-The final reviewed files were installed on lumen at 8:54 PM PT on September 14.
+The final reviewed files were installed on the desktop at 8:54 PM PT on September 14.
 Only Yoohoo's tracker was restarted; no shell/compositor restart, window
 activation, harness change, or user tmux operation was performed. Installed
-daemon and Hub module hashes match the Testbed-tested source above. Previous
+daemon and Hub module hashes match the source tested on the test machine above. Previous
 files are recoverable under
 `.local/state/yoohoo/backups/1789444467444756491` (final worker update),
 `.local/state/yoohoo/backups/1789443945570839365` (pre-worker-fix daemon), and
 `.local/state/yoohoo/backups/1789443097368229149` (pre-fix stream module).
 
-Read-only observation of the final lumen service (PID 156333) measured
+Read-only observation of the final desktop service (PID 156333) measured
 6.010034 CPU seconds over 71.87 wall seconds: **8.36% of one core for the whole
 service cgroup, including helper processes**, versus roughly 100% before.
 This is not the isolated stream's 0.0054% figure or the synthetic worker's
@@ -122,7 +122,7 @@ revision advanced from 224252 to 224414 during the interval. CPU package
 temperature measured 67°C, compared with 94°C before the fixes. Temperature
 is an observation of the whole machine, not a controlled thermal benchmark.
 
-Automated tests and benchmark execution remained Testbed-only. Lumen checks
+Automated tests and benchmark execution remained test-machine-only. The desktop checks
 were normal-service resource/status observations; no test windows or harness
 turns were generated. Periodic process matching still has a measurable cost;
 the fix does not claim zero CPU usage for the full tracker.
